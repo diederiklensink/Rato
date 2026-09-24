@@ -145,3 +145,14 @@ export interface MonthlySettlement {
   netJointCostCents: number;
   byProfile: Record<ProfileId, ProfileMonthlyResult>;
 }
+
+export interface LedgerMonthlyTotals {
+  incomeCents: number;
+  expenseCents: number;
+}
+
+export interface ForecastPoint {
+  month: YearMonth;
+  monthsAhead: number;
+  settlement: MonthlySettlement;
+}

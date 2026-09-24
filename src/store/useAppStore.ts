@@ -407,10 +407,15 @@ export function createAppStore(
           throw new Error('Reset is available only while local data needs recovery.')
         }
         await guardedStorage.removeItem(storageKey)
+        const freshData = createInitialAppData()
         set({
-          ...createInitialAppData(),
+          ...freshData,
           hydrationStatus: 'ready',
           hydrationError: null,
+        })
+        await guardedStorage.setItem(storageKey, {
+          state: freshData,
+          version: PERSIST_VERSION,
         })
       },
     }

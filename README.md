@@ -1,33 +1,26 @@
-# React + TypeScript + Vite
+# Rato
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Rato is a local-first finance dashboard for comparing monthly household costs between two partners. Financial data is stored in this browser's IndexedDB; no account or server is required.
 
-Currently, two official plugins are available:
+## Development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
-"# Rato" 
+## GitHub Pages
+
+The GitHub Actions workflow builds and deploys the site to GitHub Pages when changes are pushed to `main`. In the repository settings, set **Pages → Build and deployment → Source** to **GitHub Actions** once. You can also start a deployment from the workflow's **Run workflow** button.
+
+The workflow reads the Pages base path when it builds the app, so repository pages and custom domains use the right asset URLs. Rato stores data in the browser's IndexedDB; each browser and site origin has its own separate data.
+
+## Checks
+
+```sh
+npm run typecheck
+npm test
+npm run build
+```
+
+The initial release creates a generic baseline with two empty profiles. Scenario editing and the dashboard are planned for later development phases.

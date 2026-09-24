@@ -4,7 +4,7 @@ This plan follows the canonical model and settlement rules in [design.md](design
 
 ## Phase 1 — Foundation and persistent store
 
-1. Initialize Vite with React 18 and strict TypeScript. Add React Router v6, Tailwind CSS, Lucide React, Zustand, and `localforage`; select a chart library when charts are implemented.
+1. Initialize Vite with React 18 and strict TypeScript. Add React Router v7, Tailwind CSS, Lucide React, Zustand, and `localforage`; select a chart library when charts are implemented.
 2. Put the exact contract from `design.md` into `src/types/index.ts`. Add runtime validators for imported dates, safe integer cents, rates, IDs, recurrence, and scenario invariants.
 3. Implement `src/store/useAppStore.ts` with Zustand `persist`, `createJSONStorage`, and a `localforage` adapter. Persist only `AppData`; set a storage version and migration hook. Wait for hydration before enabling edits.
 4. Seed a baseline with two generic, empty partner profiles. Implement scenario duplication, selection, rename, deletion, profile management, ledger edits, calculation mode, and assumptions. Protect the baseline and selected participant references.
@@ -19,8 +19,8 @@ This plan follows the canonical model and settlement rules in [design.md](design
 
 ## Phase 3 — Routing and app shell
 
-1. Configure React Router v6 with `/` for the dashboard, `/editor` for the ledger, `/settings` for controls, and a fallback route.
-2. Build a shared layout with navigation, active scenario selector, selected month control, and a clear baseline/sandbox indicator.
+1. Configure React Router v7 with `/` for the dashboard, `/editor` for the ledger, `/settings` for controls, and a fallback route.
+2. Build a shared layout with navigation, active scenario selector, a selected month control backed by `?month=YYYY-MM`, and a clear baseline/sandbox indicator.
 3. Add scenario actions: duplicate and name a sandbox, switch scenarios, rename one, and delete a sandbox. Clearly show which scenario edits affect.
 4. Verify direct route loads, browser back/forward, scenario switching, and hydration before interaction.
 

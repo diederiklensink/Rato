@@ -206,4 +206,23 @@ describe('Rato persisted store', () => {
     expect(await getRawItem()).toBe(unsupported)
     expect(store.getState().hydrationError).toMatch(/version 29/)
   })
+
+  it('preserves same-version data that fails the application schema', async () => {
+    const invalidSchema = JSON.stringify({
+      state: {
+        schemaVersion: 1,
+        baselineScenarioId: 'missing',
+        activeScenarioId: 'missing',
+        scenarios: {},
+        settings: { currencyCode: 'EUR' },
+      },
+      version: 1,
+    })
+    await database.setItem(storageKey, invalidSchema)
+    const store = makeStore()
+    await waitForStatus(store, 'recovery_required')
+
+    expect(await getRawItem()).toBe(invalidSchema)
+    expect(store.getState().hydrationError).toContain('Baseline scenario does not exist')
+  })
 })

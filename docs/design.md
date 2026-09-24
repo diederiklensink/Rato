@@ -4,7 +4,7 @@
 
 Rato is a local-first, serverless single-page app for comparing the monthly financial position of two partners. Each scenario is an independent snapshot of profiles, personal ledgers, the joint ledger, calculation mode, and forecast assumptions. Duplicating the baseline creates a sandbox with no shared mutable data. The UI never assumes particular names or IDs.
 
-The stack is React 18, TypeScript, Vite, React Router v6, Tailwind CSS, Lucide React, Zustand `persist`, and `localforage` backed by IndexedDB. Pure utilities calculate results from a scenario and selected month. Zustand holds persisted data and actions; React renders selectors and dispatches actions. JSON import/export provides portability without a server.
+The stack is React 18, TypeScript, Vite, React Router v7, Tailwind CSS, Lucide React, Zustand `persist`, and `localforage` backed by IndexedDB. Pure utilities calculate results from a scenario and selected month. Zustand holds persisted data and actions; React renders selectors and dispatches actions. The selected month is URL state in `?month=YYYY-MM`, not persisted `AppData`. JSON import/export provides portability without a server.
 
 ## Canonical TypeScript contract: `src/types/index.ts`
 

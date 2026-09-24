@@ -1,47 +1,41 @@
-# calculation_engine.md
+# Monthly calculation engine
 
-## 1. Core Settlement Logic (`src/utils/calculations.ts`)
-The engine calculates the monthly transfer targets and personal discretionary budgets based on active income, active fixed expenses, and the selected calculation mode. 
+This document follows the canonical data and settlement contract in [design.md](design.md). All amounts are integer minor units (cents for EUR), and all date calculations use calendar dates.
+
+## Recurring ledger totals
+
+`getOccurrenceInMonth(recurrence, month)` returns the single occurrence date in a `YearMonth`, or `null` when the item does not occur. A one-time item occurs only in its start month. Monthly, quarterly, and yearly items stay anchored to their start month and day; if a target month is shorter, the occurrence is clamped to that month's final day. A repeating item's end date is inclusive. Monthly totals count the full amount for each occurrence and do not prorate partial months.
+
+`calculateLedgerTotals(ledger, month)` sums nominal income and expenses for the requested month. Its totals and the later settlement calculations must remain safe integers.
+
+## Settlement API and rules
 
 ```typescript
-export function calculateSettlement(
-  user1Income: number,
-  user2Income: number,
-  totalJointExpenses: number,
-  jointIncome: number, // e.g., toeslagen
-  mode: CalculationMode
-) {
-  const totalIncome = user1Income + user2Income;
-  const netJointCosts = totalJointExpenses - jointIncome;
+calculateSettlement(scenario: Scenario, month: YearMonth): MonthlySettlement
+```
 
-  let user1Contribution = 0;
-  let user2Contribution = 0;
+The engine includes the two profile ledgers referenced by `scenario.participantIds` and the joint ledger. Other profiles are ignored. It computes:
 
-  switch (mode) {
-    case 'pro_rata':
-      const user1Pct = user1Income / totalIncome;
-      const user2Pct = user2Income / totalIncome;
-      user1Contribution = netJointCosts * user1Pct;
-      user2Contribution = netJointCosts * user2Pct;
-      break;
-    
-    case 'fifty_fifty':
-      user1Contribution = netJointCosts / 2;
-      user2Contribution = netJointCosts / 2;
-      break;
+```text
+netJointCostCents = jointExpenseCents - jointIncomeCents
+```
 
-    case 'equal_remainder':
-      const totalLeft = totalIncome - netJointCosts;
-      const equalShare = totalLeft / 2;
-      user1Contribution = user1Income - equalShare;
-      user2Contribution = user2Income - equalShare;
-      break;
-  }
+Positive contributions pay into the joint pool. Negative contributions receive money from it. Contributions always sum exactly to the net joint cost.
 
-  return {
-    user1Contribution,
-    user2Contribution,
-    user1Free: user1Income - user1Contribution,
-    user2Free: user2Income - user2Contribution
-  };
-}
+| Mode | First participant's unrounded contribution |
+| --- | --- |
+| Pro rata | `netJointCost × firstIncome / (firstIncome + secondIncome)`; split equally when both incomes are zero. |
+| 50/50 | `netJointCost / 2`. |
+| Equal remainder | `firstAvailable - (firstAvailable + secondAvailable - netJointCost) / 2`, where each available amount is personal income minus personal expenses. |
+
+Round the first contribution to cents using half away from zero, then set the second contribution to `netJointCostCents - firstContributionCents`. Calculate each partner's discretionary amount as personal income minus personal expenses minus their signed contribution. Preserve negative discretionary amounts and negative contributions. Fail explicitly if a total or result cannot be represented as a safe integer number of cents.
+
+## Forecasts
+
+`buildMonthlyForecast(scenario, baseMonth, monthCount)` returns a sequence beginning with `baseMonth`; that first point uses nominal amounts and has `monthsAhead: 0`. Later points use `monthsAhead` relative to that base month. For each occurrence, project income with the scenario's annual income growth rate and expenses with the category override when present, otherwise the global expense inflation rate:
+
+```text
+projectedCents = round(amountCents × (1 + annualRate) ** (monthsAhead / 12))
+```
+
+Project and round each occurrence before summing a month's totals. Rates must be finite and greater than `-1`. Forecasts do not mutate scenarios; they return the same `MonthlySettlement` shape as nominal calculations for each point.
