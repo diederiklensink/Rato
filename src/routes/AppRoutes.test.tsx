@@ -133,6 +133,22 @@ describe('application routes and shell', () => {
     expect(container.querySelector('nav[aria-label="Primary navigation"]')).not.toBeNull()
   })
 
+  it('matches nested routes below a deployment base path', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(
+        <MemoryRouter basename="/rato" initialEntries={['/rato/editor?month=2026-06']}>
+          <AppRoutes />
+        </MemoryRouter>,
+      )
+    })
+
+    expect(container.textContent).toContain('Ledger')
+    expect(container.querySelector<HTMLAnchorElement>('nav a[href^="/rato/editor"]')).not.toBeNull()
+  })
+
   it('preserves a valid month across route navigation and browser history', async () => {
     await mountAt('/?month=2025-04')
     expect(currentLocation()).toBe('/?month=2025-04')

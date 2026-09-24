@@ -2,7 +2,6 @@ import {
   AlertTriangle,
   CalendarDays,
   Check,
-  CircleDollarSign,
   FileSpreadsheet,
   LayoutDashboard,
   Pencil,
@@ -24,6 +23,9 @@ import {
 import type { Scenario, ScenarioId } from '../types'
 import { useAppStore } from '../store/useAppStore'
 import { currentLocalYearMonth, isYearMonth } from './monthQuery'
+import LedgerPage from '../features/ledger/LedgerPage'
+import DashboardPage from '../features/dashboard/DashboardPage'
+import SettingsPage from '../features/settings/SettingsPage'
 
 type ScenarioFormMode = 'duplicate' | 'rename' | null
 
@@ -71,8 +73,8 @@ function AppLayout() {
 
   if (!activeScenario) {
     return (
-      <main className="grid min-h-screen place-items-center bg-slate-50 p-6 text-slate-900">
-        <p className="rounded-xl border border-red-200 bg-white p-6 text-sm text-red-800" role="alert">
+      <main className="grid min-h-screen place-items-center bg-background p-6 text-foreground">
+        <p className="rounded-xl border border-danger/30 bg-surface p-6 text-sm text-danger" role="alert">
           The active scenario is unavailable. Reload Rato to recover the saved data.
         </p>
       </main>
@@ -151,33 +153,27 @@ function AppLayout() {
   const routeSearch = `?${routeParams.toString()}`
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b border-border bg-surface">
         <div className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-center gap-3">
-            <Link className="flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-800" to={`/${routeSearch}`}>
-              <span className="grid size-11 place-items-center rounded-xl bg-emerald-800 text-white">
-                <CircleDollarSign aria-hidden="true" size={25} />
-              </span>
-              <span>
-                <span className="block text-sm font-semibold uppercase tracking-[0.18em] text-emerald-800">Rato</span>
-                <span className="block text-xs text-slate-500">Private household finance</span>
-              </span>
+            <Link className="flex items-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary" to={`/${routeSearch}`}>
+              <img alt="Rato, household finance" className="h-12 w-auto" height="56" src={`${import.meta.env.BASE_URL}logo.svg`} width="204" />
             </Link>
-            <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-900">
+            <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary">
               <Check aria-hidden="true" size={14} />
               Saved on this device
             </span>
           </div>
 
-          <nav aria-label="Primary navigation" className="flex flex-wrap gap-2 border-b border-slate-100 pb-4">
+          <nav aria-label="Primary navigation" className="flex flex-wrap gap-2 border-b border-border pb-4">
             {navigation.map(({ path, label, icon: Icon, end }) => (
               <NavLink
                 className={({ isActive }) => [
-                  'inline-flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800',
+                  'inline-flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
                   isActive
-                    ? 'bg-emerald-100 text-emerald-900'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted hover:bg-surface-hover hover:text-foreground',
                 ].join(' ')}
                 end={end}
                 key={path}
@@ -192,12 +188,12 @@ function AppLayout() {
           <section aria-label="Workspace controls" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
             <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,0.55fr)]">
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="active-scenario">
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="active-scenario">
                   Active scenario
                 </label>
                 <div className="flex flex-wrap items-center gap-3">
                   <select
-                    className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800"
+                    className="min-h-11 min-w-0 flex-1 rounded-lg border border-border-strong bg-surface px-3 text-sm font-medium text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                     id="active-scenario"
                     onChange={(event) => onScenarioChange(event.currentTarget.value)}
                     value={activeScenario.id}
@@ -209,7 +205,7 @@ function AppLayout() {
                     ))}
                   </select>
                   <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-                    isBaseline ? 'bg-slate-100 text-slate-700' : 'bg-violet-100 text-violet-900'
+                    isBaseline ? 'bg-surface-hover text-muted' : 'bg-secondary/10 text-secondary-dark'
                   }`}>
                     {isBaseline ? 'Baseline' : 'Sandbox'}
                   </span>
@@ -217,12 +213,12 @@ function AppLayout() {
               </div>
 
               <div>
-                <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="selected-month">
+                <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="selected-month">
                   <CalendarDays aria-hidden="true" size={14} />
                   Selected month
                 </label>
                 <input
-                  className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800"
+                  className="min-h-11 w-full rounded-lg border border-border-strong bg-surface px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                   id="selected-month"
                   onChange={(event) => updateMonth(event.currentTarget.value)}
                   type="month"
@@ -233,7 +229,7 @@ function AppLayout() {
 
             <div className="flex flex-wrap gap-2 xl:justify-end">
               <button
-                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-emerald-800 bg-emerald-800 px-3 text-sm font-semibold text-white hover:bg-emerald-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800"
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-primary bg-primary px-3 text-sm font-semibold text-white hover:bg-primary-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 onClick={() => openScenarioForm('duplicate')}
                 type="button"
               >
@@ -241,7 +237,7 @@ function AppLayout() {
                 Create sandbox
               </button>
               <button
-                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800"
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-border-strong bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 onClick={() => openScenarioForm('rename')}
                 type="button"
               >
@@ -250,7 +246,7 @@ function AppLayout() {
               </button>
               <button
                 aria-describedby={isBaseline ? 'baseline-delete-help' : undefined}
-                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 text-sm font-medium text-red-800 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-danger/30 bg-danger/5 px-3 text-sm font-medium text-danger hover:bg-danger/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={isBaseline}
                 onClick={onDeleteScenario}
                 type="button"
@@ -261,35 +257,35 @@ function AppLayout() {
             </div>
 
             {isBaseline && (
-              <p className="text-xs text-slate-500 xl:col-span-2" id="baseline-delete-help">
+              <p className="text-xs text-muted xl:col-span-2" id="baseline-delete-help">
                 The baseline scenario is protected from deletion.
               </p>
             )}
 
             {scenarioFormMode && (
               <form
-                className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end xl:col-span-2"
+                className="grid gap-3 rounded-xl border border-border bg-background p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end xl:col-span-2"
                 onSubmit={saveScenarioForm}
               >
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-800" htmlFor="scenario-name">
+                  <label className="mb-1.5 block text-sm font-medium text-foreground" htmlFor="scenario-name">
                     {scenarioFormMode === 'duplicate' ? 'Name for the new sandbox' : 'Scenario name'}
                   </label>
                   <input
                     autoFocus
-                    className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800"
+                    className="min-h-11 w-full rounded-lg border border-border-strong bg-surface px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                     id="scenario-name"
                     onChange={(event) => setScenarioName(event.currentTarget.value)}
                     value={scenarioName}
                   />
                 </div>
                 <div className="flex gap-2">
-                  <button className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-emerald-800 px-4 text-sm font-semibold text-white hover:bg-emerald-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800" type="submit">
+                  <button className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" type="submit">
                     <Check aria-hidden="true" size={15} />
                     {scenarioFormMode === 'duplicate' ? 'Create' : 'Save name'}
                   </button>
                   <button
-                    className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700"
+                    className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-border-strong bg-surface px-4 text-sm font-medium text-foreground hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                     onClick={() => {
                       setScenarioFormMode(null)
                       setScenarioError(null)
@@ -304,7 +300,7 @@ function AppLayout() {
             )}
 
             {scenarioError && (
-              <p className="flex items-start gap-2 text-sm text-red-800 xl:col-span-2" role="alert">
+              <p className="flex items-start gap-2 text-sm text-danger xl:col-span-2" role="alert">
                 <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={16} />
                 {scenarioError}
               </p>
@@ -320,59 +316,15 @@ function AppLayout() {
   )
 }
 
-function DashboardPage() {
-  const activeScenarioId = useAppStore((state) => state.activeScenarioId)
-  const scenario = useAppStore((state) => state.scenarios[activeScenarioId])
-
-  return (
-    <section>
-      <h1 className="text-3xl font-semibold tracking-tight">Overview</h1>
-      <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-        Your local workspace is ready. Settlement summaries and dashboard visualizations arrive in Phase 5.
-      </p>
-      {scenario && (
-        <div className="mt-7 grid gap-4 sm:grid-cols-2">
-          {scenario.participantIds.map((profileId) => {
-            const profile = scenario.profiles[profileId]
-            if (!profile) return null
-            return (
-              <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm" key={profileId}>
-                <h2 className="text-lg font-semibold">{profile.name}</h2>
-                <p className="mt-2 text-sm text-slate-600">
-                  {profile.ledger.income.length} income items · {profile.ledger.expenses.length} expense items
-                </p>
-              </article>
-            )
-          })}
-        </div>
-      )}
-    </section>
-  )
-}
-
-function PlaceholderPage({ title, phase, description }: {
-  title: string;
-  phase: string;
-  description: string;
-}) {
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-9">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">{phase}</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight">{title}</h1>
-      <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">{description}</p>
-    </section>
-  )
-}
-
 function NotFoundPage() {
   const location = useLocation()
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-9">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-800">Page not found</p>
+    <section className="rounded-2xl border border-border bg-surface p-6 shadow-sm sm:p-9">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary-dark">Page not found</p>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight">That Rato page does not exist</h1>
-      <p className="mt-3 text-sm leading-6 text-slate-600">Check the address or return to your overview.</p>
+      <p className="mt-3 text-sm leading-6 text-muted">Check the address or return to your overview.</p>
       <Link
-        className="mt-6 inline-flex min-h-11 items-center rounded-lg bg-emerald-800 px-4 text-sm font-semibold text-white hover:bg-emerald-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800"
+        className="mt-6 inline-flex min-h-11 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         to={`/${location.search}`}
       >
         Go to overview
@@ -386,16 +338,8 @@ export function AppRoutes() {
     <Routes>
       <Route element={<AppLayout />} path="/">
         <Route element={<DashboardPage />} index />
-        <Route element={<PlaceholderPage
-          description="Income and expense editors for your profiles and joint ledger arrive in Phase 4."
-          phase="Planned for Phase 4"
-          title="Ledger"
-        />} path="editor" />
-        <Route element={<PlaceholderPage
-          description="Calculation mode, forecast assumptions, and currency controls arrive in Phase 6."
-          phase="Planned for Phase 6"
-          title="Settings"
-        />} path="settings" />
+        <Route element={<LedgerPage />} path="editor" />
+        <Route element={<SettingsPage />} path="settings" />
         <Route element={<NotFoundPage />} path="*" />
       </Route>
     </Routes>

@@ -151,8 +151,26 @@ describe('Rato persisted store', () => {
       annualIncomeGrowthRate: Number.NaN,
     })).toThrow()
     expect(() => store.getState().updateSettings({ currencyCode: 'eur' })).toThrow()
+    expect(() => store.getState().updateSettings({ currencyCode: 'JPY' })).toThrow()
 
     expect(store.getState().scenarios[baselineId]?.profiles[firstId]?.ledger.income).toHaveLength(0)
+  })
+
+  it('replaces category inflation overrides so removed categories fall back to the general rate', async () => {
+    const store = await makeReadyStore()
+    const baselineId = store.getState().baselineScenarioId
+
+    store.getState().updateForecastAssumptions(baselineId, {
+      expenseInflationByCategory: { Housing: 0.08, Utilities: 0.03 },
+    })
+    store.getState().updateForecastAssumptions(baselineId, {
+      expenseInflationByCategory: { Housing: 0.05 },
+    })
+    expect(store.getState().scenarios[baselineId]?.forecastAssumptions.expenseInflationByCategory)
+      .toEqual({ Housing: 0.05 })
+
+    store.getState().updateForecastAssumptions(baselineId, { expenseInflationByCategory: {} })
+    expect(store.getState().scenarios[baselineId]?.forecastAssumptions.expenseInflationByCategory).toEqual({})
   })
 
   it('requires a replacement before profile removal and falls back to baseline on scenario deletion', async () => {

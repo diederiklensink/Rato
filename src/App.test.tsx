@@ -55,7 +55,8 @@ describe('hydration shell', () => {
     await act(async () => {
       useAppStore.setState({ hydrationStatus: 'ready', hydrationError: null })
     })
-    expect(container.textContent).toContain('Income and expense editors for your profiles')
+    expect(container.textContent).toContain('Profiles and participants')
+    expect(container.textContent).toContain('Ledger items')
     expect(container.querySelector('#active-scenario')?.textContent).toContain('Baseline')
     expect(container.querySelector<HTMLInputElement>('#selected-month')?.value).toBe('2026-06')
 

@@ -376,11 +376,7 @@ export function createAppStore(
             ...scenario.forecastAssumptions,
             ...patch,
             expenseInflationByCategory: patch.expenseInflationByCategory
-              ? {
-                  ...scenario.forecastAssumptions.expenseInflationByCategory,
-                  ...patch.expenseInflationByCategory,
-                }
-              : scenario.forecastAssumptions.expenseInflationByCategory,
+              ?? scenario.forecastAssumptions.expenseInflationByCategory,
           })
           return timestampScenario(scenario, { forecastAssumptions: assumptions })
         })

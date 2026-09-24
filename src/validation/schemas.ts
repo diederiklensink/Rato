@@ -10,6 +10,7 @@ import type {
   Recurrence,
   Scenario,
 } from '../types'
+import { SUPPORTED_CURRENCY_CODES } from '../constants/currencies'
 
 const IdentifierSchema = z.string().trim().min(1, 'ID cannot be empty')
 export const NameSchema = z.string().trim().min(1, 'Name cannot be empty')
@@ -144,7 +145,7 @@ const ScenarioSchema: z.ZodType<Scenario> = z.object({
 })
 
 export const AppSettingsSchema: z.ZodType<AppSettings> = z.object({
-  currencyCode: z.string().regex(/^[A-Z]{3}$/, 'Currency must be an uppercase ISO 4217 code'),
+  currencyCode: z.enum(SUPPORTED_CURRENCY_CODES),
 }).strict()
 
 export const AppDataSchema: z.ZodType<AppData> = z.object({

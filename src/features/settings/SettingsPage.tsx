@@ -1,0 +1,500 @@
+import { useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+import { Download, FileUp, Save, Upload } from 'lucide-react'
+import type { AppData, CalculationMode, ForecastAssumptions, Scenario } from '../../types'
+import { SUPPORTED_CURRENCIES } from '../../constants/currencies'
+import { useAppStore } from '../../store/useAppStore'
+import {
+  appDataSnapshot,
+  backupFilename,
+  parseAppDataBackup,
+  previewAppData,
+  serializeAppData,
+  type BackupPreview,
+} from '../../utils/importExport'
+
+interface ForecastDraft {
+  annualIncomeGrowthRate: string;
+  annualExpenseInflationRate: string;
+  expenseInflationByCategory: Record<string, string>;
+}
+
+interface PendingBackup {
+  data: AppData;
+  fileName: string;
+  preview: BackupPreview;
+}
+
+type ForecastFieldErrors = Record<string, string>
+
+const inputClassName = 'min-h-11 w-full rounded-lg border border-border-strong bg-surface px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary'
+const buttonClassName = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
+const secondaryButtonClassName = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border-strong bg-surface px-4 text-sm font-medium text-foreground hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Rato could not complete that action.'
+}
+
+function percentDraft(rate: number): string {
+  return String(Number((rate * 100).toFixed(8)))
+}
+
+function forecastDraftFromScenario(scenario: Scenario, categoryIds: string[]): ForecastDraft {
+  const overrides = scenario.forecastAssumptions.expenseInflationByCategory
+  return {
+    annualIncomeGrowthRate: percentDraft(scenario.forecastAssumptions.annualIncomeGrowthRate),
+    annualExpenseInflationRate: percentDraft(scenario.forecastAssumptions.annualExpenseInflationRate),
+    expenseInflationByCategory: Object.fromEntries(categoryIds.map((categoryId) => [
+      categoryId,
+      overrides[categoryId] === undefined ? '' : percentDraft(overrides[categoryId]),
+    ])),
+  }
+}
+
+function parsePercent(value: string): { rate: number } | { error: string } {
+  if (!value.trim()) return { error: 'Enter an annual rate.' }
+  const percent = Number(value)
+  if (!Number.isFinite(percent)) return { error: 'Enter a finite percentage.' }
+  if (percent <= -100) return { error: 'The annual rate must be greater than −100%.' }
+  const rate = percent / 100
+  if (!Number.isFinite(rate) || rate <= -1) return { error: 'Enter a valid annual rate.' }
+  return { rate }
+}
+
+function categoriesForScenario(scenario: Scenario): string[] {
+  const categories = new Set<string>(Object.keys(scenario.forecastAssumptions.expenseInflationByCategory))
+  for (const profile of Object.values(scenario.profiles)) {
+    for (const item of profile.ledger.expenses) categories.add(item.categoryId)
+  }
+  for (const item of scenario.joint.expenses) categories.add(item.categoryId)
+  return [...categories].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }))
+}
+
+function SectionMessage({ message, error = false }: { message: string; error?: boolean }) {
+  return (
+    <p className={`text-sm ${error ? 'text-danger' : 'text-primary'}`} role={error ? 'alert' : 'status'}>
+      {message}
+    </p>
+  )
+}
+
+function SectionCard({ title, description, children }: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <section aria-labelledby={`${title.toLowerCase().replaceAll(' ', '-')}-heading`} className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
+      <div className="mb-5">
+        <h2 className="text-xl font-semibold tracking-tight" id={`${title.toLowerCase().replaceAll(' ', '-')}-heading`}>{title}</h2>
+        <p className="mt-1 max-w-3xl text-sm leading-6 text-muted">{description}</p>
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function FieldError({ id, message }: { id: string; message?: string | undefined }) {
+  if (!message) return null
+  return <p className="mt-1 text-xs text-danger" id={id}>{message}</p>
+}
+
+function dataForStore(state: ReturnType<typeof useAppStore.getState>): AppData {
+  return appDataSnapshot(state)
+}
+
+function SettingsEditor({
+  scenario,
+  currencyCode,
+  onBackupStart,
+  onBackupRestored,
+}: {
+  scenario: Scenario;
+  currencyCode: string;
+  onBackupStart: () => void;
+  onBackupRestored: () => void;
+}) {
+  const setCalculationMode = useAppStore((state) => state.setCalculationMode)
+  const updateForecastAssumptions = useAppStore((state) => state.updateForecastAssumptions)
+  const updateSettings = useAppStore((state) => state.updateSettings)
+  const replaceData = useAppStore((state) => state.replaceData)
+  const categoryIds = useMemo(() => categoriesForScenario(scenario), [scenario])
+
+  const [modeDraft, setModeDraft] = useState<CalculationMode>(scenario.calculationMode)
+  const [modeMessage, setModeMessage] = useState<string | null>(null)
+  const [modeError, setModeError] = useState<string | null>(null)
+  const [forecastDraft, setForecastDraft] = useState(() => forecastDraftFromScenario(scenario, categoryIds))
+  const [forecastErrors, setForecastErrors] = useState<ForecastFieldErrors>({})
+  const [forecastMessage, setForecastMessage] = useState<string | null>(null)
+  const [forecastActionError, setForecastActionError] = useState<string | null>(null)
+  const [currencyDraft, setCurrencyDraft] = useState(currencyCode)
+  const [currencyMessage, setCurrencyMessage] = useState<string | null>(null)
+  const [currencyError, setCurrencyError] = useState<string | null>(null)
+  const [pendingBackup, setPendingBackup] = useState<PendingBackup | null>(null)
+  const [backupMessage, setBackupMessage] = useState<string | null>(null)
+  const [backupError, setBackupError] = useState<string | null>(null)
+  const [backupBusy, setBackupBusy] = useState(false)
+
+  const updateForecastDraft = (field: keyof ForecastDraft, value: string) => {
+    setForecastDraft((current) => ({ ...current, [field]: value }))
+    setForecastErrors((current) => ({ ...current, [field]: '' }))
+    setForecastMessage(null)
+    setForecastActionError(null)
+  }
+
+  const updateCategoryDraft = (categoryId: string, value: string) => {
+    setForecastDraft((current) => ({
+      ...current,
+      expenseInflationByCategory: { ...current.expenseInflationByCategory, [categoryId]: value },
+    }))
+    setForecastErrors((current) => ({ ...current, [`category:${categoryId}`]: '' }))
+    setForecastMessage(null)
+    setForecastActionError(null)
+  }
+
+  const saveCalculationMode = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setModeError(null)
+    setModeMessage(null)
+    try {
+      setCalculationMode(scenario.id, modeDraft)
+      setModeMessage('Calculation mode saved for this scenario.')
+    } catch (error) {
+      setModeError(errorMessage(error))
+    }
+  }
+
+  const saveForecast = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setForecastMessage(null)
+    setForecastActionError(null)
+    const incomeResult = parsePercent(forecastDraft.annualIncomeGrowthRate)
+    const expenseResult = parsePercent(forecastDraft.annualExpenseInflationRate)
+    const nextErrors: ForecastFieldErrors = {}
+    if ('error' in incomeResult) nextErrors.annualIncomeGrowthRate = incomeResult.error
+    if ('error' in expenseResult) nextErrors.annualExpenseInflationRate = expenseResult.error
+
+    const expenseInflationByCategory: ForecastAssumptions['expenseInflationByCategory'] = {}
+    for (const categoryId of categoryIds) {
+      const value = forecastDraft.expenseInflationByCategory[categoryId] ?? ''
+      if (!value.trim()) continue
+      const parsed = parsePercent(value)
+      if ('error' in parsed) nextErrors[`category:${categoryId}`] = parsed.error
+      else expenseInflationByCategory[categoryId] = parsed.rate
+    }
+
+    setForecastErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0 || 'error' in incomeResult || 'error' in expenseResult) return
+
+    try {
+      updateForecastAssumptions(scenario.id, {
+        annualIncomeGrowthRate: incomeResult.rate,
+        annualExpenseInflationRate: expenseResult.rate,
+        expenseInflationByCategory,
+      })
+      setForecastMessage('Forecast assumptions saved for this scenario.')
+    } catch (error) {
+      setForecastActionError(errorMessage(error))
+    }
+  }
+
+  const saveCurrency = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setCurrencyError(null)
+    setCurrencyMessage(null)
+    try {
+      updateSettings({ currencyCode: currencyDraft })
+      setCurrencyMessage('App currency saved. Stored amounts were not converted.')
+    } catch (error) {
+      setCurrencyError(errorMessage(error))
+    }
+  }
+
+  const exportBackup = () => {
+    onBackupStart()
+    setBackupError(null)
+    setBackupMessage(null)
+    try {
+      const contents = serializeAppData(dataForStore(useAppStore.getState()))
+      const url = URL.createObjectURL(new Blob([contents], { type: 'application/json' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = backupFilename()
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      setBackupMessage('Backup download started.')
+    } catch (error) {
+      setBackupError(errorMessage(error))
+    }
+  }
+
+  const readBackup = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0]
+    event.currentTarget.value = ''
+    if (!file) return
+    onBackupStart()
+    setPendingBackup(null)
+    setBackupError(null)
+    setBackupMessage(null)
+    setBackupBusy(true)
+    try {
+      const data = parseAppDataBackup(await file.text())
+      setPendingBackup({ data, fileName: file.name, preview: previewAppData(data) })
+    } catch (error) {
+      setBackupError(errorMessage(error))
+    } finally {
+      setBackupBusy(false)
+    }
+  }
+
+  const confirmBackupReplacement = () => {
+    if (!pendingBackup) return
+    setBackupError(null)
+    try {
+      replaceData(pendingBackup.data)
+      onBackupRestored()
+      const nextScenario = pendingBackup.data.scenarios[pendingBackup.data.activeScenarioId]
+      setPendingBackup(null)
+      if (nextScenario) {
+        const nextCategories = categoriesForScenario(nextScenario)
+        setModeDraft(nextScenario.calculationMode)
+        setForecastDraft(forecastDraftFromScenario(nextScenario, nextCategories))
+      }
+      setCurrencyDraft(pendingBackup.data.settings.currencyCode)
+      setForecastErrors({})
+      setModeError(null)
+      setCurrencyError(null)
+    } catch (error) {
+      setBackupError(errorMessage(error))
+    }
+  }
+
+  return (
+    <div className="space-y-6 sm:space-y-8">
+      <header>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary-dark">Preferences</p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight">Settings</h1>
+        <p className="mt-2 text-sm leading-6 text-muted">
+          Scenario settings apply to <span className="font-semibold text-foreground">{scenario.name}</span>. Currency applies across this app.
+        </p>
+      </header>
+
+      <SectionCard
+        description="Choose how this scenario shares its net joint cost between the selected participants."
+        title="Calculation mode"
+      >
+        <form className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={saveCalculationMode}>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium" htmlFor="calculation-mode">Settlement method</label>
+            <select className={inputClassName} id="calculation-mode" onChange={(event) => {
+              setModeDraft(event.currentTarget.value as CalculationMode)
+              setModeMessage(null)
+              setModeError(null)
+            }} value={modeDraft}>
+              <option value="pro_rata">Pro rata by income</option>
+              <option value="fifty_fifty">50/50</option>
+              <option value="equal_remainder">Equal remainder after personal expenses</option>
+            </select>
+          </div>
+          <button className={buttonClassName} type="submit"><Save aria-hidden="true" size={16} />Save mode</button>
+        </form>
+        {modeMessage && <div className="mt-3"><SectionMessage message={modeMessage} /></div>}
+        {modeError && <div className="mt-3"><SectionMessage error message={modeError} /></div>}
+      </SectionCard>
+
+      <SectionCard
+        description="Annual assumptions are percentages. Leave a category override blank to use the general expense inflation rate."
+        title="Forecast assumptions"
+      >
+        <form className="space-y-5" onSubmit={saveForecast}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium" htmlFor="income-growth-rate">Annual income growth (%)</label>
+              <input
+                aria-describedby={forecastErrors.annualIncomeGrowthRate ? 'income-growth-rate-error' : undefined}
+                aria-invalid={Boolean(forecastErrors.annualIncomeGrowthRate)}
+                className={inputClassName}
+                id="income-growth-rate"
+                inputMode="decimal"
+                onChange={(event) => updateForecastDraft('annualIncomeGrowthRate', event.currentTarget.value)}
+                step="any"
+                type="number"
+                value={forecastDraft.annualIncomeGrowthRate}
+              />
+              <FieldError id="income-growth-rate-error" message={forecastErrors.annualIncomeGrowthRate} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium" htmlFor="expense-inflation-rate">General expense inflation (%)</label>
+              <input
+                aria-describedby={forecastErrors.annualExpenseInflationRate ? 'expense-inflation-rate-error' : undefined}
+                aria-invalid={Boolean(forecastErrors.annualExpenseInflationRate)}
+                className={inputClassName}
+                id="expense-inflation-rate"
+                inputMode="decimal"
+                onChange={(event) => updateForecastDraft('annualExpenseInflationRate', event.currentTarget.value)}
+                step="any"
+                type="number"
+                value={forecastDraft.annualExpenseInflationRate}
+              />
+              <FieldError id="expense-inflation-rate-error" message={forecastErrors.annualExpenseInflationRate} />
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold">Expense category overrides</h3>
+            {categoryIds.length === 0 ? (
+              <p className="mt-2 rounded-lg bg-background p-3 text-sm text-muted">
+                Add an expense in the Ledger to create a category-specific override.
+              </p>
+            ) : (
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {categoryIds.map((categoryId) => {
+                  const fieldId = `category-rate-${categoryIds.indexOf(categoryId)}`
+                  const errorId = `${fieldId}-error`
+                  const error = forecastErrors[`category:${categoryId}`]
+                  return (
+                    <div className="rounded-xl border border-border bg-background p-3" key={categoryId}>
+                      <label className="mb-1.5 block text-sm font-medium" htmlFor={fieldId}>{categoryId} (%)</label>
+                      <input
+                        aria-describedby={error ? errorId : undefined}
+                        aria-invalid={Boolean(error)}
+                        className={inputClassName}
+                        id={fieldId}
+                        inputMode="decimal"
+                        onChange={(event) => updateCategoryDraft(categoryId, event.currentTarget.value)}
+                        placeholder="Use general rate"
+                        step="any"
+                        type="number"
+                        value={forecastDraft.expenseInflationByCategory[categoryId] ?? ''}
+                      />
+                      <FieldError id={errorId} message={error} />
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <button className={buttonClassName} type="submit"><Save aria-hidden="true" size={16} />Save forecast assumptions</button>
+            {forecastMessage && <SectionMessage message={forecastMessage} />}
+            {forecastActionError && <SectionMessage error message={forecastActionError} />}
+          </div>
+        </form>
+      </SectionCard>
+
+      <SectionCard
+        description="The selected currency changes how amounts are displayed. Rato does not convert stored values or use exchange rates."
+        title="App currency"
+      >
+        <form className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={saveCurrency}>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium" htmlFor="app-currency">Currency</label>
+            <select className={inputClassName} id="app-currency" onChange={(event) => {
+              setCurrencyDraft(event.currentTarget.value)
+              setCurrencyMessage(null)
+              setCurrencyError(null)
+            }} value={currencyDraft}>
+              {SUPPORTED_CURRENCIES.map(({ code, label }) => (
+                <option key={code} value={code}>{label} ({code})</option>
+              ))}
+            </select>
+          </div>
+          <button className={buttonClassName} type="submit"><Save aria-hidden="true" size={16} />Save currency</button>
+        </form>
+        {currencyMessage && <div className="mt-3"><SectionMessage message={currencyMessage} /></div>}
+        {currencyError && <div className="mt-3"><SectionMessage error message={currencyError} /></div>}
+      </SectionCard>
+
+      <SectionCard
+        description="Download a portable copy of all scenarios and settings, or restore from a previous Rato backup. Backups stay on this device unless you choose where to save or share the file."
+        title="Backup and restore"
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <button className={buttonClassName} onClick={exportBackup} type="button">
+            <Download aria-hidden="true" size={16} />Download JSON backup
+          </button>
+          <label className={`${secondaryButtonClassName} cursor-pointer focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary ${backupBusy ? 'cursor-wait opacity-50' : ''}`} htmlFor="backup-file">
+            <FileUp aria-hidden="true" size={16} />Choose backup file
+            <input
+              accept=".json,application/json"
+              className="sr-only"
+              disabled={backupBusy}
+              id="backup-file"
+              onChange={(event) => void readBackup(event)}
+              type="file"
+            />
+          </label>
+        </div>
+        {backupBusy && <div className="mt-3"><SectionMessage message="Reading and validating backup…" /></div>}
+        {backupMessage && <div className="mt-3"><SectionMessage message={backupMessage} /></div>}
+        {backupError && <div className="mt-3"><SectionMessage error message={backupError} /></div>}
+
+        {pendingBackup && (
+          <div aria-labelledby="backup-preview-heading" className="mt-5 rounded-xl border border-secondary/30 bg-secondary/5 p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <Upload aria-hidden="true" className="mt-1 shrink-0 text-secondary-dark" size={18} />
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold" id="backup-preview-heading">Review backup replacement</h3>
+                <p className="mt-1 break-all text-sm text-muted">{pendingBackup.fileName}</p>
+                <p className="mt-3 text-sm leading-6">
+                  This backup will replace the current local data. Its active scenario is <strong>{pendingBackup.preview.activeScenarioName}</strong>, with {pendingBackup.preview.scenarioCount} scenarios and {pendingBackup.preview.profileCount} profiles. Currency: {pendingBackup.preview.currencyCode}.
+                </p>
+                <p className="mt-1 text-sm text-muted">
+                  It contains {pendingBackup.preview.incomeItemCount} income items and {pendingBackup.preview.expenseItemCount} expense items. Baseline: {pendingBackup.preview.baselineScenarioName}.
+                </p>
+                <ul className="mt-2 list-inside list-disc text-sm text-muted">
+                  {pendingBackup.preview.scenarioNames.map((scenarioName) => <li key={scenarioName.id}>{scenarioName.name}</li>)}
+                </ul>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <button className={buttonClassName} disabled={backupBusy} onClick={confirmBackupReplacement} type="button">
+                    Replace current data
+                  </button>
+                  <button className={secondaryButtonClassName} onClick={() => {
+                    setPendingBackup(null)
+                    setBackupError(null)
+                  }} type="button">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </SectionCard>
+    </div>
+  )
+}
+
+export default function SettingsPage() {
+  const [backupRestored, setBackupRestored] = useState(false)
+  const activeScenarioId = useAppStore((state) => state.activeScenarioId)
+  const scenario = useAppStore((state) => state.scenarios[activeScenarioId])
+  const currencyCode = useAppStore((state) => state.settings.currencyCode)
+
+  if (!scenario) {
+    return (
+      <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger" role="alert">
+        The active scenario is unavailable. Select a valid scenario before changing settings.
+      </p>
+    )
+  }
+
+  return (
+    <>
+      {backupRestored && (
+        <p className="mb-5 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-primary" role="status">
+          Backup restored successfully.
+        </p>
+      )}
+      <SettingsEditor
+        key={scenario.id}
+        onBackupRestored={() => setBackupRestored(true)}
+        onBackupStart={() => setBackupRestored(false)}
+        scenario={scenario}
+        currencyCode={currencyCode}
+      />
+    </>
+  )
+}
