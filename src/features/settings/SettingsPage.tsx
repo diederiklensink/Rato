@@ -1,7 +1,9 @@
 import { useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Download, FileUp, Save, Upload } from 'lucide-react'
 import type { AppData, CalculationMode, ForecastAssumptions, Scenario } from '../../types'
 import { SUPPORTED_CURRENCIES } from '../../constants/currencies'
+import { categoryLabel } from '../../constants/categories'
 import { useAppStore } from '../../store/useAppStore'
 import {
   appDataSnapshot,
@@ -11,6 +13,7 @@ import {
   serializeAppData,
   type BackupPreview,
 } from '../../utils/importExport'
+import { intlLocale, languageCode, translateMessage } from '../../i18n'
 
 interface ForecastDraft {
   annualIncomeGrowthRate: string;
@@ -70,9 +73,10 @@ function categoriesForScenario(scenario: Scenario): string[] {
 }
 
 function SectionMessage({ message, error = false }: { message: string; error?: boolean }) {
+  const { t } = useTranslation()
   return (
     <p className={`text-sm ${error ? 'text-danger' : 'text-primary'}`} role={error ? 'alert' : 'status'}>
-      {message}
+      {translateMessage(message, t)}
     </p>
   )
 }
@@ -82,11 +86,12 @@ function SectionCard({ title, description, children }: {
   description: string;
   children: ReactNode;
 }) {
+  const { t } = useTranslation()
   return (
     <section aria-labelledby={`${title.toLowerCase().replaceAll(' ', '-')}-heading`} className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
       <div className="mb-5">
-        <h2 className="text-xl font-semibold tracking-tight" id={`${title.toLowerCase().replaceAll(' ', '-')}-heading`}>{title}</h2>
-        <p className="mt-1 max-w-3xl text-sm leading-6 text-muted">{description}</p>
+        <h2 className="text-xl font-semibold tracking-tight" id={`${title.toLowerCase().replaceAll(' ', '-')}-heading`}>{t(title)}</h2>
+        <p className="mt-1 max-w-3xl text-sm leading-6 text-muted">{t(description)}</p>
       </div>
       {children}
     </section>
@@ -94,8 +99,9 @@ function SectionCard({ title, description, children }: {
 }
 
 function FieldError({ id, message }: { id: string; message?: string | undefined }) {
+  const { t } = useTranslation()
   if (!message) return null
-  return <p className="mt-1 text-xs text-danger" id={id}>{message}</p>
+  return <p className="mt-1 text-xs text-danger" id={id}>{translateMessage(message, t)}</p>
 }
 
 function dataForStore(state: ReturnType<typeof useAppStore.getState>): AppData {
@@ -113,6 +119,8 @@ function SettingsEditor({
   onBackupStart: () => void;
   onBackupRestored: () => void;
 }) {
+  const { t, i18n: activeI18n } = useTranslation()
+  const locale = intlLocale(activeI18n.resolvedLanguage ?? activeI18n.language)
   const setCalculationMode = useAppStore((state) => state.setCalculationMode)
   const updateForecastAssumptions = useAppStore((state) => state.updateForecastAssumptions)
   const updateSettings = useAppStore((state) => state.updateSettings)
@@ -273,10 +281,10 @@ function SettingsEditor({
   return (
     <div className="space-y-6 sm:space-y-8">
       <header>
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary-dark">Preferences</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">Settings</h1>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary-dark">{t('Preferences')}</p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight">{t('Settings')}</h1>
         <p className="mt-2 text-sm leading-6 text-muted">
-          Scenario settings apply to <span className="font-semibold text-foreground">{scenario.name}</span>. Currency applies across this app.
+          {t('Scenario settings apply to {{name}}. Currency applies across this app.', { name: scenario.name })}
         </p>
       </header>
 
@@ -286,18 +294,18 @@ function SettingsEditor({
       >
         <form className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={saveCalculationMode}>
           <div>
-            <label className="mb-1.5 block text-sm font-medium" htmlFor="calculation-mode">Settlement method</label>
+            <label className="mb-1.5 block text-sm font-medium" htmlFor="calculation-mode">{t('Settlement method')}</label>
             <select className={inputClassName} id="calculation-mode" onChange={(event) => {
               setModeDraft(event.currentTarget.value as CalculationMode)
               setModeMessage(null)
               setModeError(null)
             }} value={modeDraft}>
-              <option value="pro_rata">Pro rata by income</option>
+              <option value="pro_rata">{t('Pro rata by income')}</option>
               <option value="fifty_fifty">50/50</option>
-              <option value="equal_remainder">Equal remainder after personal expenses</option>
+              <option value="equal_remainder">{t('Equal remainder after personal expenses')}</option>
             </select>
           </div>
-          <button className={buttonClassName} type="submit"><Save aria-hidden="true" size={16} />Save mode</button>
+          <button className={buttonClassName} type="submit"><Save aria-hidden="true" size={16} />{t('Save mode')}</button>
         </form>
         {modeMessage && <div className="mt-3"><SectionMessage message={modeMessage} /></div>}
         {modeError && <div className="mt-3"><SectionMessage error message={modeError} /></div>}
@@ -310,7 +318,7 @@ function SettingsEditor({
         <form className="space-y-5" onSubmit={saveForecast}>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-sm font-medium" htmlFor="income-growth-rate">Annual income growth (%)</label>
+              <label className="mb-1.5 block text-sm font-medium" htmlFor="income-growth-rate">{t('Annual income growth (%)')}</label>
               <input
                 aria-describedby={forecastErrors.annualIncomeGrowthRate ? 'income-growth-rate-error' : undefined}
                 aria-invalid={Boolean(forecastErrors.annualIncomeGrowthRate)}
@@ -325,7 +333,7 @@ function SettingsEditor({
               <FieldError id="income-growth-rate-error" message={forecastErrors.annualIncomeGrowthRate} />
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-medium" htmlFor="expense-inflation-rate">General expense inflation (%)</label>
+              <label className="mb-1.5 block text-sm font-medium" htmlFor="expense-inflation-rate">{t('General expense inflation (%)')}</label>
               <input
                 aria-describedby={forecastErrors.annualExpenseInflationRate ? 'expense-inflation-rate-error' : undefined}
                 aria-invalid={Boolean(forecastErrors.annualExpenseInflationRate)}
@@ -342,10 +350,10 @@ function SettingsEditor({
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold">Expense category overrides</h3>
+            <h3 className="text-sm font-semibold">{t('Expense category overrides')}</h3>
             {categoryIds.length === 0 ? (
               <p className="mt-2 rounded-lg bg-background p-3 text-sm text-muted">
-                Add an expense in the Ledger to create a category-specific override.
+                {t('Add an expense in the Ledger to create a category-specific override.')}
               </p>
             ) : (
               <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -355,7 +363,7 @@ function SettingsEditor({
                   const error = forecastErrors[`category:${categoryId}`]
                   return (
                     <div className="rounded-xl border border-border bg-background p-3" key={categoryId}>
-                      <label className="mb-1.5 block text-sm font-medium" htmlFor={fieldId}>{categoryId} (%)</label>
+                      <label className="mb-1.5 block text-sm font-medium" htmlFor={fieldId}>{categoryLabel(categoryId, (key) => t(key))} (%)</label>
                       <input
                         aria-describedby={error ? errorId : undefined}
                         aria-invalid={Boolean(error)}
@@ -363,7 +371,7 @@ function SettingsEditor({
                         id={fieldId}
                         inputMode="decimal"
                         onChange={(event) => updateCategoryDraft(categoryId, event.currentTarget.value)}
-                        placeholder="Use general rate"
+                        placeholder={t('Use general rate')}
                         step="any"
                         type="number"
                         value={forecastDraft.expenseInflationByCategory[categoryId] ?? ''}
@@ -377,7 +385,7 @@ function SettingsEditor({
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <button className={buttonClassName} type="submit"><Save aria-hidden="true" size={16} />Save forecast assumptions</button>
+            <button className={buttonClassName} type="submit"><Save aria-hidden="true" size={16} />{t('Save forecast assumptions')}</button>
             {forecastMessage && <SectionMessage message={forecastMessage} />}
             {forecastActionError && <SectionMessage error message={forecastActionError} />}
           </div>
@@ -390,21 +398,39 @@ function SettingsEditor({
       >
         <form className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={saveCurrency}>
           <div>
-            <label className="mb-1.5 block text-sm font-medium" htmlFor="app-currency">Currency</label>
+            <label className="mb-1.5 block text-sm font-medium" htmlFor="app-currency">{t('Currency')}</label>
             <select className={inputClassName} id="app-currency" onChange={(event) => {
               setCurrencyDraft(event.currentTarget.value)
               setCurrencyMessage(null)
               setCurrencyError(null)
             }} value={currencyDraft}>
               {SUPPORTED_CURRENCIES.map(({ code, label }) => (
-                <option key={code} value={code}>{label} ({code})</option>
+                <option key={code} value={code}>{t(label)} ({code})</option>
               ))}
             </select>
           </div>
-          <button className={buttonClassName} type="submit"><Save aria-hidden="true" size={16} />Save currency</button>
+          <button className={buttonClassName} type="submit"><Save aria-hidden="true" size={16} />{t('Save currency')}</button>
         </form>
         {currencyMessage && <div className="mt-3"><SectionMessage message={currencyMessage} /></div>}
         {currencyError && <div className="mt-3"><SectionMessage error message={currencyError} /></div>}
+      </SectionCard>
+
+      <SectionCard
+        description="Choose the language used for labels, dates, and numbers in Rato."
+        title="Language"
+      >
+        <div className="max-w-sm">
+          <label className="mb-1.5 block text-sm font-medium" htmlFor="app-language">{t('Language')}</label>
+          <select
+            className={inputClassName}
+            id="app-language"
+            onChange={(event) => void activeI18n.changeLanguage(event.currentTarget.value)}
+            value={languageCode(activeI18n.resolvedLanguage ?? activeI18n.language)}
+          >
+            <option value="en">English</option>
+            <option value="nl">Nederlands</option>
+          </select>
+        </div>
       </SectionCard>
 
       <SectionCard
@@ -413,10 +439,10 @@ function SettingsEditor({
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <button className={buttonClassName} onClick={exportBackup} type="button">
-            <Download aria-hidden="true" size={16} />Download JSON backup
+            <Download aria-hidden="true" size={16} />{t('Download JSON backup')}
           </button>
           <label className={`${secondaryButtonClassName} cursor-pointer focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary ${backupBusy ? 'cursor-wait opacity-50' : ''}`} htmlFor="backup-file">
-            <FileUp aria-hidden="true" size={16} />Choose backup file
+            <FileUp aria-hidden="true" size={16} />{t('Choose backup file')}
             <input
               accept=".json,application/json"
               className="sr-only"
@@ -436,26 +462,39 @@ function SettingsEditor({
             <div className="flex items-start gap-3">
               <Upload aria-hidden="true" className="mt-1 shrink-0 text-secondary-dark" size={18} />
               <div className="min-w-0 flex-1">
-                <h3 className="font-semibold" id="backup-preview-heading">Review backup replacement</h3>
+                <h3 className="font-semibold" id="backup-preview-heading">{t('Review backup replacement')}</h3>
                 <p className="mt-1 break-all text-sm text-muted">{pendingBackup.fileName}</p>
                 <p className="mt-3 text-sm leading-6">
-                  This backup will replace the current local data. Its active scenario is <strong>{pendingBackup.preview.activeScenarioName}</strong>, with {pendingBackup.preview.scenarioCount} scenarios and {pendingBackup.preview.profileCount} profiles. Currency: {pendingBackup.preview.currencyCode}.
+                  {t('This backup will replace the current local data. Its active scenario is {{scenario}}, with {{scenarioCount}} {{scenarioUnit}} and {{profileCount}} {{profileUnit}}. Currency: {{currency}}.', {
+                    scenario: pendingBackup.preview.activeScenarioName,
+                    scenarioCount: new Intl.NumberFormat(locale).format(pendingBackup.preview.scenarioCount),
+                    scenarioUnit: t(pendingBackup.preview.scenarioCount === 1 ? 'scenario' : 'scenarios'),
+                    profileCount: new Intl.NumberFormat(locale).format(pendingBackup.preview.profileCount),
+                    profileUnit: t(pendingBackup.preview.profileCount === 1 ? 'profile' : 'profiles'),
+                    currency: pendingBackup.preview.currencyCode,
+                  })}
                 </p>
                 <p className="mt-1 text-sm text-muted">
-                  It contains {pendingBackup.preview.incomeItemCount} income items and {pendingBackup.preview.expenseItemCount} expense items. Baseline: {pendingBackup.preview.baselineScenarioName}.
+                  {t('It contains {{incomeCount}} {{incomeUnit}} and {{expenseCount}} {{expenseUnit}}. Baseline: {{baseline}}.', {
+                    incomeCount: new Intl.NumberFormat(locale).format(pendingBackup.preview.incomeItemCount),
+                    incomeUnit: t(pendingBackup.preview.incomeItemCount === 1 ? 'income item' : 'income items'),
+                    expenseCount: new Intl.NumberFormat(locale).format(pendingBackup.preview.expenseItemCount),
+                    expenseUnit: t(pendingBackup.preview.expenseItemCount === 1 ? 'expense item' : 'expense items'),
+                    baseline: pendingBackup.preview.baselineScenarioName,
+                  })}
                 </p>
                 <ul className="mt-2 list-inside list-disc text-sm text-muted">
                   {pendingBackup.preview.scenarioNames.map((scenarioName) => <li key={scenarioName.id}>{scenarioName.name}</li>)}
                 </ul>
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <button className={buttonClassName} disabled={backupBusy} onClick={confirmBackupReplacement} type="button">
-                    Replace current data
+                    {t('Replace current data')}
                   </button>
                   <button className={secondaryButtonClassName} onClick={() => {
                     setPendingBackup(null)
                     setBackupError(null)
                   }} type="button">
-                    Cancel
+                    {t('Cancel')}
                   </button>
                 </div>
               </div>
@@ -468,6 +507,7 @@ function SettingsEditor({
 }
 
 export default function SettingsPage() {
+  const { t } = useTranslation()
   const [backupRestored, setBackupRestored] = useState(false)
   const activeScenarioId = useAppStore((state) => state.activeScenarioId)
   const scenario = useAppStore((state) => state.scenarios[activeScenarioId])
@@ -476,7 +516,7 @@ export default function SettingsPage() {
   if (!scenario) {
     return (
       <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger" role="alert">
-        The active scenario is unavailable. Select a valid scenario before changing settings.
+        {t('The active scenario is unavailable. Select a valid scenario before changing settings.')}
       </p>
     )
   }
@@ -485,7 +525,7 @@ export default function SettingsPage() {
     <>
       {backupRestored && (
         <p className="mb-5 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-primary" role="status">
-          Backup restored successfully.
+          {t('Backup restored successfully.')}
         </p>
       )}
       <SettingsEditor

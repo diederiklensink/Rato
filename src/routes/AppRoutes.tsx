@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   CalendarDays,
+  ChevronDown,
   Check,
   FileSpreadsheet,
   LayoutDashboard,
@@ -11,6 +12,7 @@ import {
   X,
 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Link,
   NavLink,
@@ -26,6 +28,7 @@ import { currentLocalYearMonth, isYearMonth } from './monthQuery'
 import LedgerPage from '../features/ledger/LedgerPage'
 import DashboardPage from '../features/dashboard/DashboardPage'
 import SettingsPage from '../features/settings/SettingsPage'
+import { translateMessage } from '../i18n'
 
 type ScenarioFormMode = 'duplicate' | 'rename' | null
 
@@ -44,6 +47,7 @@ function roleForScenario(scenario: Scenario, baselineScenarioId: ScenarioId): st
 }
 
 function AppLayout() {
+  const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeScenarioId = useAppStore((state) => state.activeScenarioId)
   const baselineScenarioId = useAppStore((state) => state.baselineScenarioId)
@@ -75,7 +79,7 @@ function AppLayout() {
     return (
       <main className="grid min-h-screen place-items-center bg-background p-6 text-foreground">
         <p className="rounded-xl border border-danger/30 bg-surface p-6 text-sm text-danger" role="alert">
-          The active scenario is unavailable. Reload Rato to recover the saved data.
+          {t('The active scenario is unavailable. Reload Rato to recover the saved data.')}
         </p>
       </main>
     )
@@ -97,7 +101,7 @@ function AppLayout() {
 
   const openScenarioForm = (mode: Exclude<ScenarioFormMode, null>) => {
     setScenarioError(null)
-    setScenarioName(mode === 'duplicate' ? `Copy of ${activeScenario.name}` : activeScenario.name)
+    setScenarioName(mode === 'duplicate' ? t('Copy of {{name}}', { name: activeScenario.name }) : activeScenario.name)
     setScenarioFormMode(mode)
   }
 
@@ -134,9 +138,7 @@ function AppLayout() {
 
   const onDeleteScenario = () => {
     if (isBaseline) return
-    const confirmed = window.confirm(
-      `Delete the sandbox “${activeScenario.name}”? Its scenario data will be removed from this device.`,
-    )
+    const confirmed = window.confirm(t('Delete the sandbox “{{name}}”? Its scenario data will be removed from this device.', { name: activeScenario.name }))
     if (!confirmed) return
 
     try {
@@ -158,15 +160,15 @@ function AppLayout() {
         <div className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-center gap-3">
             <Link className="flex items-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary" to={`/${routeSearch}`}>
-              <img alt="Rato, household finance" className="h-12 w-auto" height="56" src={`${import.meta.env.BASE_URL}logo.svg`} width="204" />
+              <img alt={t('Rato, household finance')} className="h-12 w-auto" height="56" src={`${import.meta.env.BASE_URL}logo.svg`} width="204" />
             </Link>
             <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary">
               <Check aria-hidden="true" size={14} />
-              Saved on this device
+              {t('Saved on this device')}
             </span>
           </div>
 
-          <nav aria-label="Primary navigation" className="flex flex-wrap gap-2 border-b border-border pb-4">
+          <nav aria-label={t('Primary navigation')} className="flex flex-wrap gap-2 border-b border-border pb-4">
             {navigation.map(({ path, label, icon: Icon, end }) => (
               <NavLink
                 className={({ isActive }) => [
@@ -180,131 +182,131 @@ function AppLayout() {
                 to={`${path}${routeSearch}`}
               >
                 <Icon aria-hidden="true" size={17} />
-                {label}
+                {t(label)}
               </NavLink>
             ))}
           </nav>
 
-          <section aria-label="Workspace controls" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,0.55fr)]">
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="active-scenario">
-                  Active scenario
-                </label>
-                <div className="flex flex-wrap items-center gap-3">
+          <section aria-label={t('Workspace controls')} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(13rem,0.45fr)] sm:items-end">
+            <div className="max-w-sm">
+              <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="selected-month">
+                <CalendarDays aria-hidden="true" size={14} />
+                {t('Selected month')}
+              </label>
+              <input
+                className="min-h-11 w-full rounded-lg border border-border-strong bg-surface px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                id="selected-month"
+                onChange={(event) => updateMonth(event.currentTarget.value)}
+                type="month"
+                value={selectedMonth}
+              />
+            </div>
+
+            <details className="relative z-20 min-w-0 sm:justify-self-end sm:w-full sm:max-w-md">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-3 text-sm text-muted hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                <span className="font-medium text-foreground">{t('Scenarios')}</span>
+                <span aria-hidden="true">·</span>
+                <span className="min-w-0 flex-1 truncate">{activeScenario.name}</span>
+                <span className="text-xs">{t(isBaseline ? 'Baseline' : 'Sandbox')}</span>
+                <ChevronDown aria-hidden="true" className="shrink-0" size={16} />
+              </summary>
+
+              <div className="absolute right-0 top-full z-50 mt-2 grid w-80 max-w-[calc(100vw-2rem)] gap-3 rounded-xl border border-border bg-background p-4 shadow-lg">
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="active-scenario">
+                    {t('Active scenario')}
+                  </label>
                   <select
-                    className="min-h-11 min-w-0 flex-1 rounded-lg border border-border-strong bg-surface px-3 text-sm font-medium text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    className="min-h-11 w-full rounded-lg border border-border-strong bg-surface px-3 text-sm font-medium text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                     id="active-scenario"
                     onChange={(event) => onScenarioChange(event.currentTarget.value)}
                     value={activeScenario.id}
                   >
                     {orderedScenarios.map((scenario) => (
                       <option key={scenario.id} value={scenario.id}>
-                        {scenario.name} · {roleForScenario(scenario, baselineScenarioId)}
+                        {scenario.name} · {t(roleForScenario(scenario, baselineScenarioId))}
                       </option>
                     ))}
                   </select>
-                  <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-                    isBaseline ? 'bg-surface-hover text-muted' : 'bg-secondary/10 text-secondary-dark'
-                  }`}>
-                    {isBaseline ? 'Baseline' : 'Sandbox'}
-                  </span>
                 </div>
-              </div>
 
-              <div>
-                <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="selected-month">
-                  <CalendarDays aria-hidden="true" size={14} />
-                  Selected month
-                </label>
-                <input
-                  className="min-h-11 w-full rounded-lg border border-border-strong bg-surface px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                  id="selected-month"
-                  onChange={(event) => updateMonth(event.currentTarget.value)}
-                  type="month"
-                  value={selectedMonth}
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2 xl:justify-end">
-              <button
-                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-primary bg-primary px-3 text-sm font-semibold text-white hover:bg-primary-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                onClick={() => openScenarioForm('duplicate')}
-                type="button"
-              >
-                <Plus aria-hidden="true" size={16} />
-                Create sandbox
-              </button>
-              <button
-                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-border-strong bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                onClick={() => openScenarioForm('rename')}
-                type="button"
-              >
-                <Pencil aria-hidden="true" size={15} />
-                Rename
-              </button>
-              <button
-                aria-describedby={isBaseline ? 'baseline-delete-help' : undefined}
-                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-danger/30 bg-danger/5 px-3 text-sm font-medium text-danger hover:bg-danger/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={isBaseline}
-                onClick={onDeleteScenario}
-                type="button"
-              >
-                <Trash2 aria-hidden="true" size={15} />
-                Delete sandbox
-              </button>
-            </div>
-
-            {isBaseline && (
-              <p className="text-xs text-muted xl:col-span-2" id="baseline-delete-help">
-                The baseline scenario is protected from deletion.
-              </p>
-            )}
-
-            {scenarioFormMode && (
-              <form
-                className="grid gap-3 rounded-xl border border-border bg-background p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end xl:col-span-2"
-                onSubmit={saveScenarioForm}
-              >
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-foreground" htmlFor="scenario-name">
-                    {scenarioFormMode === 'duplicate' ? 'Name for the new sandbox' : 'Scenario name'}
-                  </label>
-                  <input
-                    autoFocus
-                    className="min-h-11 w-full rounded-lg border border-border-strong bg-surface px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                    id="scenario-name"
-                    onChange={(event) => setScenarioName(event.currentTarget.value)}
-                    value={scenarioName}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" type="submit">
-                    <Check aria-hidden="true" size={15} />
-                    {scenarioFormMode === 'duplicate' ? 'Create' : 'Save name'}
-                  </button>
+                <div className="flex flex-wrap gap-2">
                   <button
-                    className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-border-strong bg-surface px-4 text-sm font-medium text-foreground hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                    onClick={() => {
-                      setScenarioFormMode(null)
-                      setScenarioError(null)
-                    }}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-border-strong bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    onClick={() => openScenarioForm('duplicate')}
                     type="button"
                   >
-                    <X aria-hidden="true" size={15} />
-                    Cancel
+                    <Plus aria-hidden="true" size={16} />
+                    {t('Create sandbox')}
+                  </button>
+                  <button
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-border-strong bg-surface px-3 text-sm font-medium text-foreground hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    onClick={() => openScenarioForm('rename')}
+                    type="button"
+                  >
+                    <Pencil aria-hidden="true" size={15} />
+                    {t('Rename')}
+                  </button>
+                  <button
+                    aria-describedby={isBaseline ? 'baseline-delete-help' : undefined}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-danger/30 bg-danger/5 px-3 text-sm font-medium text-danger hover:bg-danger/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={isBaseline}
+                    onClick={onDeleteScenario}
+                    type="button"
+                  >
+                    <Trash2 aria-hidden="true" size={15} />
+                    {t('Delete sandbox')}
                   </button>
                 </div>
-              </form>
-            )}
 
-            {scenarioError && (
-              <p className="flex items-start gap-2 text-sm text-danger xl:col-span-2" role="alert">
-                <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={16} />
-                {scenarioError}
-              </p>
-            )}
+                {isBaseline && (
+                  <p className="text-xs text-muted" id="baseline-delete-help">
+                    {t('The baseline scenario is protected from deletion.')}
+                  </p>
+                )}
+
+                {scenarioFormMode && (
+                  <form className="grid gap-3 border-t border-border pt-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={saveScenarioForm}>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-foreground" htmlFor="scenario-name">
+                        {t(scenarioFormMode === 'duplicate' ? 'Name for the new sandbox' : 'Scenario name')}
+                      </label>
+                      <input
+                        autoFocus
+                        className="min-h-11 w-full rounded-lg border border-border-strong bg-surface px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                        id="scenario-name"
+                        onChange={(event) => setScenarioName(event.currentTarget.value)}
+                        value={scenarioName}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" type="submit">
+                        <Check aria-hidden="true" size={15} />
+                        {t(scenarioFormMode === 'duplicate' ? 'Create' : 'Save name')}
+                      </button>
+                      <button
+                        className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-border-strong bg-surface px-4 text-sm font-medium text-foreground hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                        onClick={() => {
+                          setScenarioFormMode(null)
+                          setScenarioError(null)
+                        }}
+                        type="button"
+                      >
+                        <X aria-hidden="true" size={15} />
+                        {t('Cancel')}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {scenarioError && (
+                  <p className="flex items-start gap-2 text-sm text-danger" role="alert">
+                    <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={16} />
+                    {translateMessage(scenarioError, t)}
+                  </p>
+                )}
+              </div>
+            </details>
           </section>
         </div>
       </header>
@@ -318,16 +320,17 @@ function AppLayout() {
 
 function NotFoundPage() {
   const location = useLocation()
+  const { t } = useTranslation()
   return (
     <section className="rounded-2xl border border-border bg-surface p-6 shadow-sm sm:p-9">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary-dark">Page not found</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight">That Rato page does not exist</h1>
-      <p className="mt-3 text-sm leading-6 text-muted">Check the address or return to your overview.</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary-dark">{t('Page not found')}</p>
+      <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t('That Rato page does not exist')}</h1>
+      <p className="mt-3 text-sm leading-6 text-muted">{t('Check the address or return to your overview.')}</p>
       <Link
         className="mt-6 inline-flex min-h-11 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         to={`/${location.search}`}
       >
-        Go to overview
+        {t('Go to overview')}
       </Link>
     </section>
   )

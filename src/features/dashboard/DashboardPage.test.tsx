@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AppData, AppStore, FinancialItem, ProfileId, ScenarioId } from '../../types'
 import { createInitialAppData, useAppStore } from '../../store/useAppStore'
 import { AppRoutes } from '../../routes/AppRoutes'
+import i18n from '../../i18n'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
@@ -76,7 +77,7 @@ function monthLabel(month: string): string {
   const date = new Date(0)
   date.setFullYear(year ?? 0, (monthNumber ?? 1) - 1, 1)
   date.setHours(12, 0, 0, 0)
-  return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(date)
+  return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(date)
 }
 
 function seedScenario(): { scenarioId: ScenarioId; firstId: ProfileId; secondId: ProfileId } {
@@ -242,5 +243,19 @@ describe('dashboard and forecast views', () => {
 
     expect(container.textContent).toContain('Higher joint income')
     expect(netCostValue()).not.toBe(firstNetCost)
+  })
+
+  it('formats dates and currency using the selected interface language', async () => {
+    seedScenario()
+    await mountDashboard()
+    expect(container.textContent).toContain('June 2026')
+
+    await act(async () => i18n.changeLanguage('nl'))
+
+    expect(container.textContent).toContain('juni 2026')
+    expect(container.textContent).toContain(new Intl.NumberFormat('nl-NL', {
+      style: 'currency',
+      currency: 'EUR',
+    }).format(1_200))
   })
 })

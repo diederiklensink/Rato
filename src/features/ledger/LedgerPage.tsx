@@ -8,6 +8,7 @@ import {
   X,
 } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import type {
   FinancialItem,
@@ -18,9 +19,11 @@ import type {
   Recurrence,
   Scenario,
 } from '../../types'
+import { categoryIdFromInput, categoryLabel, LEDGER_CATEGORIES } from '../../constants/categories'
 import { useAppStore } from '../../store/useAppStore'
 import { FinancialItemSchema } from '../../validation/schemas'
 import { currentLocalYearMonth, isYearMonth } from '../../routes/monthQuery'
+import { intlLocale, translateMessage } from '../../i18n'
 
 type Frequency = Recurrence['frequency']
 type ItemDraft = {
@@ -138,23 +141,29 @@ function newItemDraft(selectedMonth: string): ItemDraft {
   }
 }
 
-function formatCurrency(cents: number, currencyCode: string): string {
+function formatCurrency(cents: number, currencyCode: string, locale: string): string {
   const amount = cents / 100
   try {
-    return new Intl.NumberFormat(undefined, {
+    return new Intl.NumberFormat(locale, {
       style: 'currency',
       currency: currencyCode,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount)
   } catch {
-    return new Intl.NumberFormat(undefined, {
+    return new Intl.NumberFormat(locale, {
       style: 'currency',
       currency: 'EUR',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount)
   }
+}
+
+function formatDate(value: string, locale: string): string {
+  const date = new Date(`${value}T12:00:00`)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(date)
 }
 
 function DraftField({
@@ -166,6 +175,9 @@ function DraftField({
   type = 'text',
   step,
   min,
+  list,
+  placeholder,
+  helper,
   disabled = false,
 }: {
   field: ItemField
@@ -176,11 +188,17 @@ function DraftField({
   type?: 'text' | 'number' | 'date'
   step?: string
   min?: string
+  list?: string
+  placeholder?: string
+  helper?: string
   disabled?: boolean
 }) {
+  const { t } = useTranslation()
   const generatedId = useId().replaceAll(':', '')
   const inputId = `${generatedId}-${field}`
   const errorId = `${inputId}-error`
+  const helperId = `${inputId}-helper`
+  const describedBy = [error ? errorId : null, helper ? helperId : null].filter(Boolean).join(' ') || undefined
 
   return (
     <div className="min-w-0">
@@ -188,49 +206,57 @@ function DraftField({
         {label}
       </label>
       <input
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={describedBy}
         aria-invalid={error ? true : undefined}
         className={inputClassName}
         disabled={disabled}
         id={inputId}
+        list={list}
         min={min}
         onChange={(event) => onChange(field, event.currentTarget.value)}
+        placeholder={placeholder}
         step={step}
         type={type}
         value={value}
       />
-      {error && <p className="mt-1 text-xs leading-5 text-danger" id={errorId}>{error}</p>}
+      {helper && <p className="mt-1 text-xs leading-5 text-muted" id={helperId}>{helper}</p>}
+      {error && <p className="mt-1 text-xs leading-5 text-danger" id={errorId}>{translateMessage(error, t)}</p>}
     </div>
   )
 }
 
 function ItemDraftCard({
   editing,
+  kind,
   currencyCode,
   onChange,
   onSubmit,
   onCancel,
 }: {
   editing: EditingItem
+  kind: LedgerKind
   currencyCode: string
   onChange: (field: ItemField, value: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   onCancel: () => void
 }) {
+  const { t } = useTranslation()
   const generatedId = useId().replaceAll(':', '')
   const frequencyId = `${generatedId}-frequency`
+  const categoryListId = `${generatedId}-categories`
   const validation = validateItemDraft(editing.id, editing.draft)
   const errors = editing.attempted ? validation.errors : {}
   const fieldColumns = 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(12rem,1.35fr)_minmax(8rem,0.75fr)_minmax(8rem,1fr)_minmax(8rem,0.9fr)_minmax(8rem,1fr)_minmax(8rem,1fr)]'
   const update = (field: ItemField, value: string) => onChange(field, value)
+  const translateCategory = (categoryId: string) => t(categoryId)
 
   return (
     <form className="rounded-xl border border-secondary/30 bg-secondary/5 p-4" onSubmit={onSubmit} noValidate>
       <div className={fieldColumns}>
-        <DraftField field="name" label="Name" value={editing.draft.name} error={errors.name} onChange={update} />
+        <DraftField field="name" label={t('Name')} value={editing.draft.name} error={errors.name} onChange={update} />
         <DraftField
           field="amount"
-          label={`Amount (${currencyCode})`}
+          label={t('Amount ({{currency}})', { currency: currencyCode })}
           value={editing.draft.amount}
           error={errors.amount}
           onChange={update}
@@ -238,10 +264,26 @@ function ItemDraftCard({
           min="0"
           step="0.01"
         />
-        <DraftField field="category" label="Category" value={editing.draft.category} error={errors.category} onChange={update} />
+        <div className="min-w-0">
+          <DraftField
+            field="category"
+            label={t('Category')}
+            value={categoryLabel(editing.draft.category, translateCategory)}
+            error={errors.category}
+            helper={t('Choose a standard category or enter your own.')}
+            list={categoryListId}
+            onChange={(_field, value) => onChange('category', categoryIdFromInput(value, kind, translateCategory))}
+            placeholder={t('Select or type a category')}
+          />
+          <datalist id={categoryListId}>
+            {LEDGER_CATEGORIES[kind].map((categoryId) => (
+              <option key={categoryId} value={t(categoryId)} />
+            ))}
+          </datalist>
+        </div>
         <div className="min-w-0">
           <label className="mb-1 block text-xs font-medium text-muted lg:sr-only" htmlFor={frequencyId}>
-            Frequency
+            {t('Frequency')}
           </label>
           <select
             className={inputClassName}
@@ -249,28 +291,28 @@ function ItemDraftCard({
             onChange={(event) => update('frequency', event.currentTarget.value as Frequency)}
             value={editing.draft.frequency}
           >
-            {frequencyOptions.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+            {frequencyOptions.map(({ value, label }) => <option key={value} value={value}>{t(label)}</option>)}
           </select>
         </div>
-        <DraftField field="startDate" label="Start date" value={editing.draft.startDate} error={errors.startDate} onChange={update} type="date" />
+        <DraftField field="startDate" label={t('Start date')} value={editing.draft.startDate} error={errors.startDate} onChange={update} type="date" />
         {editing.draft.frequency === 'once'
           ? <div className="hidden lg:block" aria-hidden="true" />
-          : <DraftField field="endDate" label="End date (optional)" value={editing.draft.endDate} error={errors.endDate} onChange={update} type="date" />}
+          : <DraftField field="endDate" label={t('End date (optional)')} value={editing.draft.endDate} error={errors.endDate} onChange={update} type="date" />}
       </div>
       {editing.actionError && (
         <p className="mt-3 flex items-start gap-2 text-sm text-danger" role="alert">
           <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={16} />
-          {editing.actionError}
+          {translateMessage(editing.actionError, t)}
         </p>
       )}
       <div className="mt-4 flex flex-wrap justify-end gap-2">
         <button className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-white hover:bg-primary-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" type="submit">
           <Save aria-hidden="true" size={15} />
-          Save item
+          {t('Save item')}
         </button>
         <button className={secondaryButtonClassName} onClick={onCancel} type="button">
           <X aria-hidden="true" size={15} />
-          Cancel
+          {t('Cancel')}
         </button>
       </div>
     </form>
@@ -289,6 +331,7 @@ function ViewField({ label, value }: { label: string; value: string }) {
 function ItemRow({
   item,
   currencyCode,
+  locale,
   disabled,
   onEdit,
   onDuplicate,
@@ -296,35 +339,37 @@ function ItemRow({
 }: {
   item: FinancialItem
   currencyCode: string
+  locale: string
   disabled: boolean
   onEdit: () => void
   onDuplicate: () => void
   onDelete: () => void
 }) {
+  const { t } = useTranslation()
   const recurrence = item.recurrence
   const recurrenceLabel = frequencyOptions.find(({ value }) => value === recurrence.frequency)?.label ?? recurrence.frequency
-  const endDate = recurrence.frequency === 'once' ? '—' : recurrence.endDate ?? 'No end date'
+  const endDate = recurrence.frequency === 'once' ? '—' : recurrence.endDate ? formatDate(recurrence.endDate, locale) : t('No end date')
   const rowColumns = 'grid grid-cols-1 gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-[minmax(12rem,1.35fr)_minmax(8rem,0.75fr)_minmax(8rem,1fr)_minmax(8rem,0.9fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_auto] lg:items-center'
 
   return (
     <article className={rowColumns}>
-      <ViewField label="Name" value={item.name} />
-      <ViewField label="Amount" value={formatCurrency(item.amountCents, currencyCode)} />
-      <ViewField label="Category" value={item.categoryId} />
-      <ViewField label="Frequency" value={recurrenceLabel} />
-      <ViewField label="Start date" value={recurrence.startDate} />
-      <ViewField label="End date" value={endDate} />
+      <ViewField label={t('Name')} value={item.name} />
+      <ViewField label={t('Amount')} value={formatCurrency(item.amountCents, currencyCode, locale)} />
+    <ViewField label={t('Category')} value={categoryLabel(item.categoryId, (key) => t(key))} />
+      <ViewField label={t('Frequency')} value={t(recurrenceLabel)} />
+      <ViewField label={t('Start date')} value={formatDate(recurrence.startDate, locale)} />
+      <ViewField label={t('End date')} value={endDate} />
       <div className="flex flex-wrap gap-2 lg:justify-end">
-        <button aria-label={`Edit ${item.name}`} className={secondaryButtonClassName} disabled={disabled} onClick={onEdit} type="button">
-          Edit
+        <button aria-label={t('Edit {{name}}', { name: item.name })} className={secondaryButtonClassName} disabled={disabled} onClick={onEdit} type="button">
+          {t('Edit')}
         </button>
-        <button aria-label={`Duplicate ${item.name}`} className={secondaryButtonClassName} disabled={disabled} onClick={onDuplicate} type="button">
+        <button aria-label={t('Duplicate {{name}}', { name: item.name })} className={secondaryButtonClassName} disabled={disabled} onClick={onDuplicate} type="button">
           <Copy aria-hidden="true" size={15} />
-          Duplicate
+          {t('Duplicate')}
         </button>
-        <button aria-label={`Delete ${item.name}`} className={dangerButtonClassName} disabled={disabled} onClick={onDelete} type="button">
+        <button aria-label={t('Delete {{name}}', { name: item.name })} className={dangerButtonClassName} disabled={disabled} onClick={onDelete} type="button">
           <Trash2 aria-hidden="true" size={15} />
-          Delete
+          {t('Delete')}
         </button>
       </div>
     </article>
@@ -339,6 +384,7 @@ function LedgerEditor({
   items,
   selectedMonth,
   currencyCode,
+  locale,
 }: {
   scenarioId: string
   owner: LedgerOwner
@@ -347,13 +393,15 @@ function LedgerEditor({
   items: FinancialItem[]
   selectedMonth: string
   currencyCode: string
+  locale: string
 }) {
+  const { t } = useTranslation()
   const upsertItem = useAppStore((state) => state.upsertItem)
   const removeItem = useAppStore((state) => state.removeItem)
   const [editing, setEditing] = useState<EditingItem | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const label = kind === 'income' ? 'Income' : 'Expenses'
-  const addLabel = kind === 'income' ? 'Add income item' : 'Add expense item'
+  const label = t(kind === 'income' ? 'Income' : 'Expenses')
+  const addLabel = t(kind === 'income' ? 'Add income item' : 'Add expense item')
 
   const beginAdd = () => {
     setActionError(null)
@@ -394,7 +442,7 @@ function LedgerEditor({
       upsertItem(scenarioId, owner, kind, {
         ...item,
         id: makeId(),
-        name: `${item.name} (copy)`,
+        name: t('{{name}} (copy)', { name: item.name }),
       })
       setActionError(null)
     } catch (error) {
@@ -403,7 +451,7 @@ function LedgerEditor({
   }
 
   const deleteItem = (item: FinancialItem) => {
-    const confirmed = window.confirm(`Delete “${item.name}” from ${ownerLabel} ${label.toLowerCase()}? This action cannot be undone.`)
+    const confirmed = window.confirm(t('Delete “{{name}}” from {{owner}} {{kind}}? This action cannot be undone.', { name: item.name, owner: ownerLabel, kind: label.toLowerCase() }))
     if (!confirmed) return
     try {
       removeItem(scenarioId, owner, kind, item.id)
@@ -414,11 +462,11 @@ function LedgerEditor({
   }
 
   return (
-    <section aria-label={`${ownerLabel} ${label.toLowerCase()}`} className="rounded-2xl border border-border bg-background p-4 sm:p-5">
+    <section aria-label={t('Ledger section for {{owner}}: {{kind}}', { owner: ownerLabel, kind: label.toLowerCase() })} className="rounded-2xl border border-border bg-background p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-foreground">{label}</h3>
-          <p className="mt-1 text-sm text-muted">{items.length} {items.length === 1 ? 'item' : 'items'}</p>
+          <p className="mt-1 text-sm text-muted">{t(items.length === 1 ? '{{value}} item' : '{{value}} items', { value: new Intl.NumberFormat(locale).format(items.length) })}</p>
         </div>
         <button className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-secondary-dark px-3 text-sm font-semibold text-white hover:bg-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-dark disabled:cursor-not-allowed disabled:opacity-50" disabled={Boolean(editing)} onClick={beginAdd} type="button">
           <Plus aria-hidden="true" size={16} />
@@ -429,17 +477,18 @@ function LedgerEditor({
       {actionError && (
         <p className="mt-3 flex items-start gap-2 text-sm text-danger" role="alert">
           <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={16} />
-          {actionError}
+          {translateMessage(actionError, t)}
         </p>
       )}
 
       <div className="mt-4 hidden gap-3 px-4 text-xs font-semibold uppercase tracking-wide text-muted lg:grid lg:grid-cols-[minmax(12rem,1.35fr)_minmax(8rem,0.75fr)_minmax(8rem,1fr)_minmax(8rem,0.9fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_auto]">
-        <span>Name</span><span>Amount</span><span>Category</span><span>Frequency</span><span>Start date</span><span>End date</span><span className="sr-only">Actions</span>
+        <span>{t('Name')}</span><span>{t('Amount')}</span><span>{t('Category')}</span><span>{t('Frequency')}</span><span>{t('Start date')}</span><span>{t('End date')}</span><span className="sr-only">{t('Actions')}</span>
       </div>
-      <div className="mt-3 space-y-3" aria-label={`${label} items`}>
+      <div className="mt-3 space-y-3" aria-label={t('{{kind}} items', { kind: label })}>
         {editing?.mode === 'add' && (
           <ItemDraftCard
             editing={editing}
+            kind={kind}
             currencyCode={currencyCode}
             onChange={updateDraft}
             onSubmit={saveDraft}
@@ -450,6 +499,7 @@ function LedgerEditor({
           ? <ItemDraftCard
               key={item.id}
               editing={editing}
+              kind={kind}
               currencyCode={currencyCode}
               onChange={updateDraft}
               onSubmit={saveDraft}
@@ -459,6 +509,7 @@ function LedgerEditor({
               key={item.id}
               item={item}
               currencyCode={currencyCode}
+              locale={locale}
               disabled={Boolean(editing)}
               onEdit={() => beginEdit(item)}
               onDuplicate={() => duplicateItem(item)}
@@ -466,7 +517,7 @@ function LedgerEditor({
             />)}
         {items.length === 0 && editing?.mode !== 'add' && (
           <p className="rounded-xl border border-dashed border-border-strong bg-surface p-5 text-sm text-muted">
-            No {label.toLowerCase()} items yet. Add one to get started.
+            {t(kind === 'income' ? 'No income items yet. Add one to get started.' : 'No expense items yet. Add one to get started.')}
           </p>
         )}
       </div>
@@ -483,6 +534,7 @@ function ProfileNameRow({
   profile: Profile
   isParticipant: boolean
 }) {
+  const { t } = useTranslation()
   const generatedId = useId().replaceAll(':', '')
   const renameProfile = useAppStore((state) => state.renameProfile)
   const removeProfile = useAppStore((state) => state.removeProfile)
@@ -503,7 +555,7 @@ function ProfileNameRow({
 
   const deleteProfile = () => {
     if (isParticipant) return
-    const confirmed = window.confirm(`Remove profile “${profile.name}” and its ledger from this scenario?`)
+    const confirmed = window.confirm(t('Remove profile “{{name}}” and its ledger from this scenario?', { name: profile.name }))
     if (!confirmed) return
     try {
       removeProfile(scenarioId, profile.id)
@@ -520,35 +572,36 @@ function ProfileNameRow({
     <li className="grid gap-3 rounded-xl border border-border bg-surface p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
       <form className="min-w-0" onSubmit={saveName}>
         <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted" htmlFor={nameId}>
-          Name for {profile.name}
+          {t('Name for {{name}}', { name: profile.name })}
         </label>
         <div className="flex flex-wrap gap-2">
           <input className={`${inputClassName} min-w-[12rem] flex-1`} id={nameId} onChange={(event) => setName(event.currentTarget.value)} value={name} />
-          <button aria-label={`Save name for ${profile.name}`} className={secondaryButtonClassName} disabled={!name.trim() || name.trim() === profile.name} type="submit">
+          <button aria-label={t('Save name for {{name}}', { name: profile.name })} className={secondaryButtonClassName} disabled={!name.trim() || name.trim() === profile.name} type="submit">
             <Save aria-hidden="true" size={15} />
-            Save profile name
+            {t('Save profile name')}
           </button>
         </div>
-        {error && <p className="mt-2 text-sm text-danger" role="alert">{error}</p>}
-        {isParticipant && <p className="mt-2 text-xs text-secondary-dark">Selected participant</p>}
-        {isParticipant && <p className="sr-only" id={deleteHelpId}>Change the participant selection before removing this profile.</p>}
+        {error && <p className="mt-2 text-sm text-danger" role="alert">{translateMessage(error, t)}</p>}
+        {isParticipant && <p className="mt-2 text-xs text-secondary-dark">{t('Selected participant')}</p>}
+        {isParticipant && <p className="sr-only" id={deleteHelpId}>{t('Change the participant selection before removing this profile.')}</p>}
       </form>
       <button
         aria-describedby={isParticipant ? deleteHelpId : undefined}
-        aria-label={`Remove profile ${profile.name}`}
+        aria-label={t('Remove profile {{name}}', { name: profile.name })}
         className={dangerButtonClassName}
         disabled={isParticipant}
         onClick={deleteProfile}
         type="button"
       >
         <Trash2 aria-hidden="true" size={15} />
-        Remove profile
+        {t('Remove profile')}
       </button>
     </li>
   )
 }
 
 function ProfileManagement({ scenario, scenarioId }: { scenario: Scenario; scenarioId: string }) {
+  const { t } = useTranslation()
   const addProfile = useAppStore((state) => state.addProfile)
   const setParticipants = useAppStore((state) => state.setParticipants)
   const profiles = Object.values(scenario.profiles)
@@ -593,20 +646,20 @@ function ProfileManagement({ scenario, scenarioId }: { scenario: Scenario; scena
     .filter((profile) => profile.id !== excludeId)
     .map((profile) => (
       <option key={profile.id} value={profile.id}>
-        {profile.name} · profile {profiles.findIndex((entry) => entry.id === profile.id) + 1}
+        {t('{{name}} · profile {{index}}', { name: profile.name, index: profiles.findIndex((entry) => entry.id === profile.id) + 1 })}
       </option>
     ))
 
   return (
-    <section aria-labelledby="profile-management-title" className="mt-7 rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
+    <section aria-labelledby="profile-management-title" className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
       <div>
-        <h2 className="text-xl font-semibold tracking-tight" id="profile-management-title">Profiles and participants</h2>
-        <p className="mt-1 text-sm text-muted">Choose the two profiles included in settlement, or manage profile ledgers below.</p>
+        <h2 className="text-xl font-semibold tracking-tight" id="profile-management-title">{t('Profiles and participants')}</h2>
+        <p className="mt-1 text-sm text-muted">{t('Add profiles and choose who shares costs. You can leave this alone if you only need one profile.')}</p>
       </div>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground" htmlFor="participant-one">Participant 1</label>
+          <label className="mb-1.5 block text-sm font-medium text-foreground" htmlFor="participant-one">{t('Participant 1')}</label>
           <select
             className={inputClassName}
             id="participant-one"
@@ -617,7 +670,7 @@ function ProfileManagement({ scenario, scenarioId }: { scenario: Scenario; scena
           </select>
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground" htmlFor="participant-two">Participant 2</label>
+          <label className="mb-1.5 block text-sm font-medium text-foreground" htmlFor="participant-two">{t('Participant 2')}</label>
           <select
             className={inputClassName}
             id="participant-two"
@@ -631,15 +684,15 @@ function ProfileManagement({ scenario, scenarioId }: { scenario: Scenario; scena
 
       <form className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-end" onSubmit={createProfile}>
         <div className="min-w-0 flex-1">
-          <label className="mb-1.5 block text-sm font-medium text-foreground" htmlFor="new-profile-name">New profile name</label>
+          <label className="mb-1.5 block text-sm font-medium text-foreground" htmlFor="new-profile-name">{t('New profile name')}</label>
           <input className={inputClassName} id="new-profile-name" onChange={(event) => setNewProfileName(event.currentTarget.value)} value={newProfileName} />
         </div>
         <button className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-secondary-dark px-3 text-sm font-semibold text-white hover:bg-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-dark" type="submit">
           <UserRoundPlus aria-hidden="true" size={16} />
-          Add profile
+          {t('Add profile')}
         </button>
       </form>
-      {error && <p className="mt-3 text-sm text-danger" role="alert">{error}</p>}
+      {error && <p className="mt-3 text-sm text-danger" role="alert">{translateMessage(error, t)}</p>}
 
       <ul className="mt-5 grid list-none gap-3 p-0">
         {profiles.map((profile) => (
@@ -656,17 +709,18 @@ function ProfileManagement({ scenario, scenarioId }: { scenario: Scenario; scena
 }
 
 function LedgerPage() {
+  const { t, i18n } = useTranslation()
   const [searchParams] = useSearchParams()
   const activeScenarioId = useAppStore((state) => state.activeScenarioId)
   const scenario = useAppStore((state) => state.scenarios[state.activeScenarioId])
-  const baselineScenarioId = useAppStore((state) => state.baselineScenarioId)
   const currencyCode = useAppStore((state) => state.settings.currencyCode)
+  const locale = intlLocale(i18n.resolvedLanguage ?? i18n.language)
   const [selectedProfileTab, setSelectedProfileTab] = useState<string | null>(null)
   const requestedMonth = searchParams.get('month')
   const selectedMonth = isYearMonth(requestedMonth) ? requestedMonth : currentLocalYearMonth()
 
   if (!scenario) {
-    return <p className="rounded-xl border border-danger/30 bg-surface p-5 text-sm text-danger" role="alert">The active scenario is unavailable. Reload Rato to recover the saved data.</p>
+    return <p className="rounded-xl border border-danger/30 bg-surface p-5 text-sm text-danger" role="alert">{t('The active scenario is unavailable. Reload Rato to recover the saved data.')}</p>
   }
 
   const profiles = Object.values(scenario.profiles)
@@ -677,60 +731,50 @@ function LedgerPage() {
   const isJoint = selectedProfileTab === 'joint'
   const owner: LedgerOwner = isJoint ? { scope: 'joint' } : { scope: 'profile', profileId: activeProfileId }
   const ledger = isJoint ? scenario.joint : activeProfile?.ledger
-  const ownerLabel = isJoint ? 'Joint ledger' : activeProfile?.name ?? 'Profile ledger'
+  const ownerLabel = isJoint ? t('Joint ledger') : activeProfile?.name ?? t('Profile ledger')
 
   return (
     <div>
       <header>
-        <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${scenario.id === baselineScenarioId ? 'text-primary' : 'text-secondary-dark'}`}>{scenario.id === baselineScenarioId ? 'Baseline' : 'Sandbox'} · {scenario.name}</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Ledger</h1>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t('Ledger')}</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-          Changes save to this scenario. Edit any profile or the joint ledger; settlement uses the two selected participants.
+          {t('Enter income and expenses for your main profile. Add another profile or shared costs when you need them.')}
         </p>
       </header>
-
-      <ProfileManagement key={activeScenarioId} scenario={scenario} scenarioId={activeScenarioId} />
 
       <section aria-labelledby="ledger-owner-title" className="mt-8">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-xl font-semibold tracking-tight" id="ledger-owner-title">Ledger items</h2>
+            <h2 className="text-xl font-semibold tracking-tight" id="ledger-owner-title">{t('Income and expenses')}</h2>
             <p className="mt-1 text-sm text-muted">{ownerLabel}</p>
           </div>
-          <p className="text-xs font-medium text-muted">Amounts in {currencyCode}</p>
+          <p className="text-xs font-medium text-muted">{t('Amounts in {{currency}}', { currency: currencyCode })}</p>
         </div>
 
-        <div aria-label="Ledger owner" className="mt-4 flex flex-wrap gap-2" role="group">
+        <div aria-label={t('Ledger owner')} className="mt-4 flex flex-wrap gap-2" role="group">
           {profiles.map((profile) => {
             const isActive = !isJoint && activeProfileId === profile.id
-            const participantIndex = scenario.participantIds.indexOf(profile.id)
-            const isParticipant = participantIndex >= 0
-            const activeTone = participantIndex === 1
-              ? 'border-secondary-dark bg-secondary-dark text-white'
-              : 'border-primary bg-primary text-white'
-            const participantTone = participantIndex === 1
-              ? 'bg-secondary/10 text-secondary-dark'
-              : 'bg-primary/10 text-primary'
+            const isParticipant = scenario.participantIds.includes(profile.id)
             return (
               <button
                 aria-pressed={isActive}
-                className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${isActive ? activeTone : 'border-border-strong bg-surface text-foreground hover:bg-surface-hover'}`}
+                className={`inline-flex min-h-9 items-center gap-2 rounded-lg border px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${isActive ? 'border-primary bg-primary text-white' : 'border-border-strong bg-surface text-foreground hover:bg-surface-hover'}`}
                 key={profile.id}
                 onClick={() => setSelectedProfileTab(profile.id)}
                 type="button"
               >
                 {profile.name}
-                {isParticipant && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isActive ? 'bg-white/20 text-white' : participantTone}`}>Participant</span>}
+                {isParticipant && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isActive ? 'bg-white/20 text-white' : 'bg-surface-hover text-muted'}`}>{t('Participant')}</span>}
               </button>
             )
           })}
           <button
             aria-pressed={isJoint}
-            className={`inline-flex min-h-10 items-center rounded-lg border px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${isJoint ? 'border-primary bg-primary text-white' : 'border-border-strong bg-surface text-foreground hover:bg-surface-hover'}`}
+            className={`inline-flex min-h-9 items-center rounded-lg border px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${isJoint ? 'border-primary bg-primary text-white' : 'border-border-strong bg-surface text-foreground hover:bg-surface-hover'}`}
             onClick={() => setSelectedProfileTab('joint')}
             type="button"
           >
-            Joint ledger
+            {t('Joint ledger')}
           </button>
         </div>
 
@@ -745,6 +789,7 @@ function LedgerPage() {
               items={ledger.income}
               selectedMonth={selectedMonth}
               currencyCode={currencyCode}
+              locale={locale}
             />
             <LedgerEditor
               key={`${activeScenarioId}:${isJoint ? 'joint' : activeProfileId}:expense`}
@@ -755,10 +800,20 @@ function LedgerPage() {
               items={ledger.expenses}
               selectedMonth={selectedMonth}
               currencyCode={currencyCode}
+              locale={locale}
             />
           </div>
         )}
       </section>
+
+      <details className="mt-7">
+        <summary className="cursor-pointer list-none rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-muted hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+          {t('Manage profiles and settlement')}
+        </summary>
+        <div className="mt-3">
+          <ProfileManagement key={activeScenarioId} scenario={scenario} scenarioId={activeScenarioId} />
+        </div>
+      </details>
     </div>
   )
 }

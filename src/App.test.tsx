@@ -44,6 +44,44 @@ describe('hydration shell', () => {
     container.remove()
   })
 
+  it('switches the app language, updates the document language, and stores only a browser preference', async () => {
+    const before = useAppStore.getState()
+    const appDataBefore = JSON.stringify({
+      schemaVersion: before.schemaVersion,
+      baselineScenarioId: before.baselineScenarioId,
+      activeScenarioId: before.activeScenarioId,
+      scenarios: before.scenarios,
+      settings: before.settings,
+    })
+    window.history.replaceState({}, '', '/settings')
+
+    await act(async () => root?.render(<App />))
+    const language = container.querySelector<HTMLSelectElement>('#app-language')
+    expect(language).not.toBeNull()
+    if (!language) throw new Error('Language selector was not rendered')
+    const valueSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set
+    if (!valueSetter) throw new Error('Native select value setter is unavailable')
+
+    await act(async () => {
+      valueSetter.call(language, 'nl')
+      language.dispatchEvent(new Event('input', { bubbles: true }))
+      language.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    expect(container.textContent).toContain('Taal')
+    expect(container.textContent).toContain('Back-up en herstel')
+    expect(document.documentElement.lang).toBe('nl')
+    expect(window.localStorage.getItem('rato.language')).toBe('nl')
+    const after = useAppStore.getState()
+    expect(JSON.stringify({
+      schemaVersion: after.schemaVersion,
+      baselineScenarioId: after.baselineScenarioId,
+      activeScenarioId: after.activeScenarioId,
+      scenarios: after.scenarios,
+      settings: after.settings,
+    })).toBe(appDataBefore)
+  })
+
   it('renders loading, ready, and recovery states', async () => {
     await act(async () => {
       window.history.replaceState({}, '', '/editor?month=2026-06')
