@@ -25,6 +25,14 @@ describe('JSON backup utilities', () => {
     const scenario = data.scenarios[data.activeScenarioId]
     if (!scenario) throw new Error('Initial scenario is missing')
     scenario.joint.expenses.push(item('joint-rent', 125_000))
+    scenario.planning.openingBalanceCents = 250_000
+    scenario.planning.savingsGoals.push({
+      id: 'emergency-fund',
+      name: 'Emergency fund',
+      targetCents: 1_000_000,
+      savedCents: 250_000,
+      targetDate: '2028-01-01',
+    })
 
     const json = serializeAppData(data)
     const parsed = parseAppDataBackup(json)
@@ -37,7 +45,7 @@ describe('JSON backup utilities', () => {
       'schemaVersion',
       'settings',
     ])
-    expect(document).toHaveProperty('schemaVersion', 1)
+    expect(document).toHaveProperty('schemaVersion', 2)
     expect(document).not.toHaveProperty('state')
     expect(document).not.toHaveProperty('version')
     expect(document).not.toHaveProperty('hydrationStatus')
@@ -61,12 +69,25 @@ describe('JSON backup utilities', () => {
 
   it('rejects malformed JSON, unsupported versions, invalid data, and unsupported currencies', () => {
     expect(() => parseAppDataBackup('{')).toThrow(/not valid JSON/)
-    expect(() => parseAppDataBackup('{"schemaVersion":2}')).toThrow(/Unsupported backup schema version/)
+    expect(() => parseAppDataBackup('{"schemaVersion":3}')).toThrow(/Unsupported backup schema version/)
     expect(() => parseAppDataBackup('{"schemaVersion":1}')).toThrow()
 
     const data = createInitialAppData()
     data.settings.currencyCode = 'JPY'
     expect(() => parseAppDataBackup(JSON.stringify(data))).toThrow(/currencyCode/)
+  })
+
+  it('migrates version 1 backups with empty planning data for every scenario', () => {
+    const data = createInitialAppData()
+    const scenarios = Object.fromEntries(Object.entries(data.scenarios).map(([id, scenario]) => {
+      const { planning: _planning, ...legacyScenario } = scenario
+      return [id, legacyScenario]
+    }))
+    const oldData = { ...data, schemaVersion: 1, scenarios }
+    const migrated = parseAppDataBackup(JSON.stringify(oldData))
+
+    expect(migrated.schemaVersion).toBe(2)
+    expect(migrated.scenarios[migrated.baselineScenarioId]?.planning).toEqual({ openingBalanceCents: 0, savingsGoals: [] })
   })
 
   it('previews scenario, profile, and ledger item counts', () => {

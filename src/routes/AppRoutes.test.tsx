@@ -125,8 +125,9 @@ describe('application routes and shell', () => {
   it.each([
     ['/', 'Overview'],
     ['/editor?month=2026-06', 'Ledger'],
+    ['/planning?month=2026-06', 'Planning'],
     ['/settings?month=2026-06', 'Settings'],
-    ['/unknown?month=2026-06', 'That Rato page does not exist'],
+    ['/unknown?month=2026-06', 'Page not found'],
   ])('renders the correct page for direct route %s', async (path, expectedText) => {
     await mountAt(path)
     expect(container.textContent).toContain(expectedText)
@@ -154,6 +155,8 @@ describe('application routes and shell', () => {
     expect(currentLocation()).toBe('/?month=2025-04')
     expect(container.querySelector<HTMLAnchorElement>('nav a[href^="/editor"]')?.getAttribute('href'))
       .toBe('/editor?month=2025-04')
+    expect(container.querySelector<HTMLAnchorElement>('nav a[href^="/planning"]')?.getAttribute('href'))
+      .toBe('/planning?month=2025-04')
 
     const editorLink = container.querySelector<HTMLAnchorElement>('nav a[href^="/editor"]')
     if (!editorLink) throw new Error('Ledger navigation link was not found')
@@ -184,7 +187,7 @@ describe('application routes and shell', () => {
     container.remove()
     await mountAt('/settings?month=2026-13')
     expect(currentLocation()).toBe(`/settings?month=${currentMonth}`)
-    expect(container.querySelector<HTMLInputElement>('#selected-month')?.value).toBe(currentMonth)
+    expect(container.querySelector<HTMLInputElement>('#selected-month')).toBeNull()
   })
 
   it('creates, selects, renames, and deletes a sandbox while protecting the baseline', async () => {

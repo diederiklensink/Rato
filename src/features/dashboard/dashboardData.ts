@@ -10,6 +10,17 @@ export interface CategoryLedgerBreakdownRow {
   expenseCents: number;
 }
 
+export interface RankedExpenseCategory {
+  categoryId: string;
+  expenseCents: number;
+  grouped: boolean;
+}
+
+export interface RankedExpenseCategories {
+  categories: RankedExpenseCategory[];
+  totalExpensesCents: number;
+}
+
 const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER)
 
 function addCents(total: number, amount: number, categoryId: string): number {
@@ -74,4 +85,33 @@ export function buildCategoryLedgerBreakdown(
       || left.ownerName.localeCompare(right.ownerName, undefined, { sensitivity: 'base' })
       || left.ownerKey.localeCompare(right.ownerKey)
   ))
+}
+
+/** Returns the largest expense categories and combines the remainder into one row. */
+export function rankExpenseCategories(
+  rows: CategoryLedgerBreakdownRow[],
+  limit = 5,
+): RankedExpenseCategories {
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError('Category limit must be positive.')
+  const totals = new Map<string, number>()
+  let totalExpensesCents = 0
+  for (const row of rows) {
+    if (!Number.isSafeInteger(row.expenseCents) || row.expenseCents < 0) {
+      throw new RangeError(`Category "${row.categoryId}" contains an invalid amount.`)
+    }
+    totals.set(row.categoryId, addCents(totals.get(row.categoryId) ?? 0, row.expenseCents, row.categoryId))
+    totalExpensesCents = addCents(totalExpensesCents, row.expenseCents, row.categoryId)
+  }
+  const sorted = [...totals.entries()]
+    .filter(([, amount]) => amount > 0)
+    .map(([categoryId, expenseCents]) => ({ categoryId, expenseCents, grouped: false }))
+    .sort((left, right) => right.expenseCents - left.expenseCents
+      || left.categoryId.localeCompare(right.categoryId, undefined, { sensitivity: 'base' }))
+  const visible = sorted.slice(0, limit)
+  const groupedCents = sorted.slice(limit).reduce(
+    (sum, category) => addCents(sum, category.expenseCents, category.categoryId),
+    0,
+  )
+  if (groupedCents > 0) visible.push({ categoryId: 'Other categories', expenseCents: groupedCents, grouped: true })
+  return { categories: visible, totalExpensesCents }
 }

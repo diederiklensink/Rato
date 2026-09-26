@@ -69,6 +69,7 @@ function baseScenario(): Scenario {
       expenses: [recurringItem('joint-cost', 18_000, 'groceries')],
     },
     calculationMode: 'fifty_fifty',
+    planning: { openingBalanceCents: 0, savingsGoals: [] },
     forecastAssumptions: {
       annualExpenseInflationRate: 0.12,
       annualIncomeGrowthRate: 0.12,

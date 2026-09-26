@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FinancialItem, Scenario } from '../../types'
-import { buildCategoryLedgerBreakdown } from './dashboardData'
+import { buildCategoryLedgerBreakdown, rankExpenseCategories } from './dashboardData'
 
 const FIRST = 'profile-first'
 const SECOND = 'profile-second'
@@ -74,6 +74,7 @@ function scenario(): Scenario {
       expenses: [monthlyItem('shared-rent', 'Rent', 80_000, 'Housing')],
     },
     calculationMode: 'pro_rata',
+    planning: { openingBalanceCents: 0, savingsGoals: [] },
     forecastAssumptions: {
       annualExpenseInflationRate: 0,
       annualIncomeGrowthRate: 0,
@@ -139,5 +140,28 @@ describe('dashboard category and owner breakdown', () => {
       .toBeUndefined()
     expect(rows.find((row) => row.ownerKey === `profile:${SECOND}` && row.categoryId === 'Housing')
       ?.expenseCents).toBe(40_000)
+  })
+
+  it('ranks five expense categories and groups the remaining amount', () => {
+    const rows = ['Housing', 'Groceries', 'Utilities', 'Travel', 'Pets', 'Other expenses'].map((categoryId, index) => ({
+      key: categoryId,
+      categoryId,
+      ownerKey: 'joint',
+      ownerName: 'Joint ledger',
+      incomeCents: 0,
+      expenseCents: (6 - index) * 100,
+    }))
+
+    expect(rankExpenseCategories(rows)).toEqual({
+      totalExpensesCents: 2_100,
+      categories: [
+        { categoryId: 'Housing', expenseCents: 600, grouped: false },
+        { categoryId: 'Groceries', expenseCents: 500, grouped: false },
+        { categoryId: 'Utilities', expenseCents: 400, grouped: false },
+        { categoryId: 'Travel', expenseCents: 300, grouped: false },
+        { categoryId: 'Pets', expenseCents: 200, grouped: false },
+        { categoryId: 'Other categories', expenseCents: 100, grouped: true },
+      ],
+    })
   })
 })

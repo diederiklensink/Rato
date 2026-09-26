@@ -1,5 +1,5 @@
 import type { AppData, AppStore } from '../types'
-import { AppDataSchema } from '../validation/schemas'
+import { AppDataSchema, migrateAppDataV1ToV2 } from '../validation/schemas'
 
 export interface BackupPreview {
   currencyCode: string;
@@ -41,10 +41,12 @@ export function parseAppDataBackup(contents: string): AppData {
     throw new Error('The selected file is not valid JSON.')
   }
 
-  if (typeof candidate === 'object' && candidate !== null
-    && 'schemaVersion' in candidate
-    && candidate.schemaVersion !== 1) {
-    throw new Error(`Unsupported backup schema version "${String(candidate.schemaVersion)}".`)
+  if (typeof candidate === 'object' && candidate !== null && 'schemaVersion' in candidate) {
+    const version = candidate.schemaVersion
+    if (version === 1) return migrateAppDataV1ToV2(candidate)
+    if (version !== 2) {
+      throw new Error(`Unsupported backup schema version "${String(version)}".`)
+    }
   }
 
   const result = AppDataSchema.safeParse(candidate)

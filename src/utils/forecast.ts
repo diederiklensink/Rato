@@ -78,6 +78,20 @@ function projectOccurrence(
   return rounded
 }
 
+/** Applies the forecast growth assumption to a single scheduled item. */
+export function projectFinancialItemAmount(
+  item: FinancialItem,
+  rate: number,
+  monthsAhead: number,
+): number {
+  assertAmountCents(item)
+  assertRate(rate, 'Projection rate')
+  if (!Number.isSafeInteger(monthsAhead) || monthsAhead < 0) {
+    throw new RangeError('Months ahead must be a nonnegative safe integer.')
+  }
+  return projectOccurrence(item, rate, monthsAhead)
+}
+
 function projectedLedgerTotals(
   ledger: Ledger,
   month: YearMonth,

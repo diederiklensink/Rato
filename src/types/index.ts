@@ -50,6 +50,19 @@ export interface ForecastAssumptions {
   expenseInflationByCategory: Record<CategoryId, number>;
 }
 
+export interface SavingsGoal {
+  id: string;
+  name: string;
+  targetCents: number;
+  savedCents: number;
+  targetDate: ISODate;
+}
+
+export interface ScenarioPlanning {
+  openingBalanceCents: number;
+  savingsGoals: SavingsGoal[];
+}
+
 export interface Scenario {
   id: ScenarioId;
   name: string;
@@ -61,6 +74,7 @@ export interface Scenario {
   joint: Ledger;
   calculationMode: CalculationMode;
   forecastAssumptions: ForecastAssumptions;
+  planning: ScenarioPlanning;
 }
 
 export interface AppSettings {
@@ -68,7 +82,7 @@ export interface AppSettings {
 }
 
 export interface AppData {
-  schemaVersion: 1;
+  schemaVersion: 2;
   baselineScenarioId: ScenarioId;
   activeScenarioId: ScenarioId;
   scenarios: Record<ScenarioId, Scenario>;
@@ -122,6 +136,9 @@ export interface AppActions {
     scenarioId: ScenarioId,
     patch: Partial<ForecastAssumptions>,
   ) => void;
+  setScenarioOpeningBalance: (scenarioId: ScenarioId, amountCents: number) => void;
+  upsertSavingsGoal: (scenarioId: ScenarioId, goal: SavingsGoal) => void;
+  removeSavingsGoal: (scenarioId: ScenarioId, goalId: string) => void;
   updateSettings: (patch: Partial<AppSettings>) => void;
   replaceData: (data: AppData) => void;
   retryHydration: () => void;

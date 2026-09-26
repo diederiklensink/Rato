@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   CalendarDays,
+  CalendarRange,
   ChevronDown,
   Check,
   FileSpreadsheet,
@@ -11,7 +12,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useEffect, useState, type FormEvent } from 'react'
+import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Link,
@@ -30,11 +31,14 @@ import DashboardPage from '../features/dashboard/DashboardPage'
 import SettingsPage from '../features/settings/SettingsPage'
 import { translateMessage } from '../i18n'
 
+const PlanningPage = lazy(() => import('../features/planning/PlanningPage'))
+
 type ScenarioFormMode = 'duplicate' | 'rename' | null
 
 const navigation = [
   { path: '/', label: 'Overview', icon: LayoutDashboard, end: true },
   { path: '/editor', label: 'Ledger', icon: FileSpreadsheet, end: false },
+  { path: '/planning', label: 'Planning', icon: CalendarRange, end: false },
   { path: '/settings', label: 'Settings', icon: Settings, end: false },
 ] as const
 
@@ -65,7 +69,7 @@ function AppLayout() {
   const [scenarioFormMode, setScenarioFormMode] = useState<ScenarioFormMode>(null)
   const [scenarioName, setScenarioName] = useState('')
   const [scenarioError, setScenarioError] = useState<string | null>(null)
-  const showMonth = location.pathname === '/' || location.pathname === '/editor'
+  const showMonth = location.pathname === '/' || location.pathname === '/editor' || location.pathname === '/planning'
 
   useEffect(() => {
     const monthValues = searchParams.getAll('month')
@@ -331,12 +335,22 @@ function NotFoundPage() {
   )
 }
 
+function PlanningPageLoader() {
+  const { t } = useTranslation()
+  return (
+    <Suspense fallback={<p className="rounded-xl border border-border bg-surface p-4 text-sm text-muted" role="status">{t('Loading planning…')}</p>}>
+      <PlanningPage />
+    </Suspense>
+  )
+}
+
 export function AppRoutes() {
   return (
     <Routes>
       <Route element={<AppLayout />} path="/">
         <Route element={<DashboardPage />} index />
         <Route element={<LedgerPage />} path="editor" />
+        <Route element={<PlanningPageLoader />} path="planning" />
         <Route element={<SettingsPage />} path="settings" />
         <Route element={<NotFoundPage />} path="*" />
       </Route>

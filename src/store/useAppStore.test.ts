@@ -5,6 +5,7 @@ import {
   APP_STORAGE_KEY,
   createAppStore,
   createLocalForagePersistStorage,
+  createInitialAppData,
 } from './useAppStore'
 
 const database = localforage.createInstance({
@@ -156,6 +157,43 @@ describe('Rato persisted store', () => {
     expect(store.getState().scenarios[baselineId]?.profiles[firstId]?.ledger.income).toHaveLength(0)
   })
 
+  it('stores opening balances and savings goals independently for each scenario', async () => {
+    const store = await makeReadyStore()
+    const baselineId = store.getState().baselineScenarioId
+    store.getState().setScenarioOpeningBalance(baselineId, -25_000)
+    store.getState().upsertSavingsGoal(baselineId, {
+      id: 'emergency-fund',
+      name: 'Emergency fund',
+      targetCents: 500_000,
+      savedCents: 100_000,
+      targetDate: '2027-12-31',
+    })
+    const sandboxId = store.getState().duplicateScenario(baselineId, 'Planning sandbox')
+    store.getState().setScenarioOpeningBalance(sandboxId, 100_000)
+    store.getState().upsertSavingsGoal(sandboxId, {
+      id: 'emergency-fund',
+      name: 'Larger emergency fund',
+      targetCents: 750_000,
+      savedCents: 100_000,
+      targetDate: '2028-12-31',
+    })
+
+    expect(store.getState().scenarios[baselineId]?.planning).toEqual({
+      openingBalanceCents: -25_000,
+      savingsGoals: [{ id: 'emergency-fund', name: 'Emergency fund', targetCents: 500_000, savedCents: 100_000, targetDate: '2027-12-31' }],
+    })
+    expect(store.getState().scenarios[sandboxId]?.planning.openingBalanceCents).toBe(100_000)
+    expect(store.getState().scenarios[sandboxId]?.planning.savingsGoals[0]?.name).toBe('Larger emergency fund')
+
+    expect(() => store.getState().upsertSavingsGoal(baselineId, {
+      id: 'invalid-goal', name: 'Invalid', targetCents: 0, savedCents: 0, targetDate: '2026-02-30',
+    })).toThrow()
+    store.getState().removeSavingsGoal(sandboxId, 'emergency-fund')
+    expect(store.getState().scenarios[sandboxId]?.planning.savingsGoals).toEqual([])
+    expect(store.getState().scenarios[baselineId]?.planning.savingsGoals).toHaveLength(1)
+
+  })
+
   it('replaces category inflation overrides so removed categories fall back to the general rate', async () => {
     const store = await makeReadyStore()
     const baselineId = store.getState().baselineScenarioId
@@ -211,7 +249,7 @@ describe('Rato persisted store', () => {
     expect(store.getState().hydrationStatus).toBe('ready')
     expect(store.getState().baselineScenarioId).not.toBe(previousBaselineId)
     const repaired = JSON.parse((await getRawItem()) ?? 'null') as { version: number; state: AppData }
-    expect(repaired.version).toBe(1)
+    expect(repaired.version).toBe(2)
     expect(repaired.state.baselineScenarioId).toBe(store.getState().baselineScenarioId)
   })
 
@@ -223,6 +261,24 @@ describe('Rato persisted store', () => {
 
     expect(await getRawItem()).toBe(unsupported)
     expect(store.getState().hydrationError).toMatch(/version 29/)
+  })
+
+  it('migrates version 1 local data and saves its new planning defaults', async () => {
+    const current = createInitialAppData()
+    const scenarios = Object.fromEntries(Object.entries(current.scenarios).map(([id, scenario]) => {
+      const { planning: _planning, ...legacyScenario } = scenario
+      return [id, legacyScenario]
+    }))
+    const oldData = { ...current, schemaVersion: 1, scenarios }
+    await database.setItem(storageKey, JSON.stringify({ state: oldData, version: 1 }))
+
+    const store = await makeReadyStore()
+    const scenario = store.getState().scenarios[store.getState().baselineScenarioId]
+    expect(store.getState().schemaVersion).toBe(2)
+    expect(scenario?.planning).toEqual({ openingBalanceCents: 0, savingsGoals: [] })
+    const persisted = JSON.parse((await getRawItem()) ?? 'null') as { version: number; state: AppData }
+    expect(persisted.version).toBe(2)
+    expect(persisted.state.schemaVersion).toBe(2)
   })
 
   it('preserves same-version data that fails the application schema', async () => {

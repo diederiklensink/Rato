@@ -17,6 +17,7 @@ import type {
   ProfileId,
   Scenario,
   ScenarioId,
+  SavingsGoal,
 } from '../types'
 import {
   AppDataSchema,
@@ -26,10 +27,13 @@ import {
   ForecastAssumptionsSchema,
   NameSchema,
   ProfileSchema,
+  SavingsGoalSchema,
+  ScenarioPlanningSchema,
+  migrateAppDataV1ToV2,
 } from '../validation/schemas'
 
 export const APP_STORAGE_KEY = 'rato-app-state'
-const PERSIST_VERSION = 1
+const PERSIST_VERSION = 2
 
 function createId(): string {
   return globalThis.crypto.randomUUID()
@@ -67,6 +71,7 @@ export function createInitialAppData(): AppData {
     participantIds: [firstProfileId, secondProfileId],
     joint: emptyLedger(),
     calculationMode: 'pro_rata',
+    planning: { openingBalanceCents: 0, savingsGoals: [] },
     forecastAssumptions: {
       annualExpenseInflationRate: 0,
       annualIncomeGrowthRate: 0,
@@ -75,7 +80,7 @@ export function createInitialAppData(): AppData {
   }
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     baselineScenarioId,
     activeScenarioId: baselineScenarioId,
     scenarios: { [baselineScenarioId]: baseline },
@@ -382,6 +387,43 @@ export function createAppStore(
         })
       },
 
+      setScenarioOpeningBalance: (scenarioId, amountCents) => {
+        updateOneScenario(scenarioId, (scenario) => {
+          const planning = ScenarioPlanningSchema.parse({
+            ...scenario.planning,
+            openingBalanceCents: amountCents,
+          })
+          return timestampScenario(scenario, { planning })
+        })
+      },
+
+      upsertSavingsGoal: (scenarioId, inputGoal: SavingsGoal) => {
+        const goal = SavingsGoalSchema.parse(inputGoal)
+        updateOneScenario(scenarioId, (scenario) => {
+          const exists = scenario.planning.savingsGoals.some((current) => current.id === goal.id)
+          const savingsGoals = exists
+            ? scenario.planning.savingsGoals.map((current) => current.id === goal.id ? goal : current)
+            : [...scenario.planning.savingsGoals, goal]
+          return timestampScenario(scenario, {
+            planning: ScenarioPlanningSchema.parse({ ...scenario.planning, savingsGoals }),
+          })
+        })
+      },
+
+      removeSavingsGoal: (scenarioId, goalId) => {
+        updateOneScenario(scenarioId, (scenario) => {
+          if (!scenario.planning.savingsGoals.some((goal) => goal.id === goalId)) {
+            throw new Error(`Savings goal "${goalId}" does not exist.`)
+          }
+          return timestampScenario(scenario, {
+            planning: {
+              ...scenario.planning,
+              savingsGoals: scenario.planning.savingsGoals.filter((goal) => goal.id !== goalId),
+            },
+          })
+        })
+      },
+
       updateSettings: (patch) => {
         const state = get()
         requireReady(state)
@@ -420,9 +462,19 @@ export function createAppStore(
     storage: guardedStorage,
     version: PERSIST_VERSION,
     partialize: (state) => dataFromStore(state),
-    migrate: (_persistedState, version) => {
+    migrate: (persistedState, version) => {
       writesBlocked = true
-      throw new Error(`Saved data version ${version} is not supported by this app.`)
+      try {
+        if (version === 1) {
+          const migrated = migrateAppDataV1ToV2(persistedState)
+          writesBlocked = false
+          return migrated
+        }
+        throw new Error(`Saved data version ${version} is not supported by this app.`)
+      } catch (error) {
+        writesBlocked = true
+        throw error
+      }
     },
     merge: (persistedState, currentState) => {
       if (persistedState === undefined) return currentState

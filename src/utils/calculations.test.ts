@@ -77,6 +77,7 @@ function scenario(options: {
       jointExpenses === 0 ? [] : [item('joint-expense', jointExpenses)],
     ),
     calculationMode: mode,
+    planning: { openingBalanceCents: 0, savingsGoals: [] },
     forecastAssumptions: {
       annualExpenseInflationRate: 0,
       annualIncomeGrowthRate: 0,

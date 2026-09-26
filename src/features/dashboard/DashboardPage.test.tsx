@@ -148,8 +148,8 @@ function profileContribution(name: string): string {
   const card = Array.from(container.querySelectorAll('article'))
     .find((candidate) => candidate.querySelector('h3')?.textContent === name)
   const contribution = card && Array.from(card.querySelectorAll('dt'))
-    .find((label) => label.textContent === 'Contribution to joint')
-  return contribution?.parentElement?.querySelector('dd')?.textContent ?? ''
+    .find((label) => ['Pays into joint', 'Receives from joint', 'No joint payment'].includes(label.textContent ?? ''))
+  return `${contribution?.textContent ?? ''} ${contribution?.parentElement?.querySelector('dd')?.textContent ?? ''}`
 }
 
 function netCostValue(): string {
@@ -186,14 +186,17 @@ describe('dashboard and forecast views', () => {
     expect(container.textContent).toContain(monthLabel('2026-06'))
     expect(container.textContent).toContain('Joint income')
     expect(container.textContent).toContain('Net joint cost')
-    expect(profileContribution(firstName)).toContain('−')
-    expect(profileContribution(secondName)).toContain('−')
+    expect(profileContribution(firstName)).toContain('Receives from joint')
+    expect(profileContribution(secondName)).toContain('Receives from joint')
     expect(container.textContent).toContain('−')
-    expect(container.textContent).toContain('Annual assumptions used for projections')
+    expect(container.textContent).toContain('Forecast assumptions')
     expect(container.textContent).toContain('Personal expense inflation')
     expect(container.textContent).toContain('Nominal base')
     expect(container.textContent).toContain('Projected')
     expect(container.querySelector('[role="img"][aria-label*="discretionary cash"]')).not.toBeNull()
+    expect(container.querySelector('ul[aria-label="Largest expense categories"]')).not.toBeNull()
+    expect(container.textContent).toContain('Income and expense details')
+    expect(container.querySelectorAll('[role="progressbar"]')).toHaveLength(3)
 
     const tables = container.querySelectorAll('table')
     expect(tables).toHaveLength(2)

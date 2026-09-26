@@ -61,7 +61,7 @@ function labelledControl(labelText: string): HTMLInputElement | HTMLSelectElemen
 
 function button(label: string): HTMLButtonElement {
   const found = Array.from(container.querySelectorAll('button'))
-    .find((candidate) => candidate.textContent?.trim() === label)
+    .find((candidate) => candidate.textContent?.trim() === label || candidate.getAttribute('aria-label') === label)
   if (!(found instanceof HTMLButtonElement)) throw new Error(`Button "${label}" was not found`)
   return found
 }
@@ -200,7 +200,7 @@ describe('settings and backup controls', () => {
     const responsiveForm = Array.from(container.querySelectorAll('form'))
       .find((form) => form.className.includes('sm:grid-cols-[minmax(0,1fr)_auto]'))
     expect(responsiveForm).toBeDefined()
-    expect(button('Download JSON backup').tabIndex).toBe(0)
+    expect(button('Download backup').tabIndex).toBe(0)
 
     const backupInput = container.querySelector<HTMLInputElement>('#backup-file')
     const backupLabel = backupInput?.closest('label')
@@ -220,7 +220,7 @@ describe('settings and backup controls', () => {
       downloadName = this.download
     })
 
-    await click(button('Download JSON backup'))
+    await click(button('Download backup'))
 
     expect(createObjectURL).toHaveBeenCalledOnce()
     expect(createObjectURL.mock.calls[0]?.[0]).toBeInstanceOf(Blob)

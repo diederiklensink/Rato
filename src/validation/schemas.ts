@@ -9,6 +9,7 @@ import type {
   Profile,
   Recurrence,
   Scenario,
+  SavingsGoal,
 } from '../types'
 import { SUPPORTED_CURRENCY_CODES } from '../constants/currencies'
 
@@ -102,7 +103,32 @@ export const ForecastAssumptionsSchema: z.ZodType<ForecastAssumptions> = z.objec
   expenseInflationByCategory: z.record(IdentifierSchema, RateSchema),
 }).strict()
 
-const ScenarioSchema: z.ZodType<Scenario> = z.object({
+export const SavingsGoalSchema: z.ZodType<SavingsGoal> = z.object({
+  id: IdentifierSchema,
+  name: NameSchema,
+  targetCents: z.number().int().safe().positive(),
+  savedCents: z.number().int().safe().nonnegative(),
+  targetDate: ISODateSchema,
+}).strict()
+
+export const ScenarioPlanningSchema = z.object({
+  openingBalanceCents: z.number().int().safe(),
+  savingsGoals: z.array(SavingsGoalSchema).superRefine((goals, context) => {
+    const seen = new Set<string>()
+    goals.forEach((goal, index) => {
+      if (seen.has(goal.id)) {
+        context.addIssue({
+          code: 'custom',
+          path: [index, 'id'],
+          message: `Duplicate savings goal ID "${goal.id}"`,
+        })
+      }
+      seen.add(goal.id)
+    })
+  }),
+}).strict()
+
+const ScenarioV1ObjectSchema = z.object({
   id: IdentifierSchema,
   name: NameSchema,
   parentScenarioId: IdentifierSchema.nullable(),
@@ -113,71 +139,76 @@ const ScenarioSchema: z.ZodType<Scenario> = z.object({
   joint: LedgerSchema,
   calculationMode: CalculationModeSchema,
   forecastAssumptions: ForecastAssumptionsSchema,
-}).strict().superRefine((scenario, context) => {
+}).strict()
+
+function validateScenarioReferences(
+  scenario: { participantIds: [string, string]; profiles: Record<string, Profile> },
+  context: z.RefinementCtx,
+): void {
   const [firstParticipant, secondParticipant] = scenario.participantIds
   if (firstParticipant === secondParticipant) {
-    context.addIssue({
-      code: 'custom',
-      path: ['participantIds'],
-      message: 'Settlement participants must be two distinct profiles',
-    })
+    context.addIssue({ code: 'custom', path: ['participantIds'], message: 'Settlement participants must be two distinct profiles' })
   }
-
   for (const participantId of scenario.participantIds) {
     if (!hasOwnKey(scenario.profiles, participantId)) {
-      context.addIssue({
-        code: 'custom',
-        path: ['participantIds'],
-        message: `Participant "${participantId}" does not exist in this scenario`,
-      })
+      context.addIssue({ code: 'custom', path: ['participantIds'], message: `Participant "${participantId}" does not exist in this scenario` })
     }
   }
-
   for (const [profileId, profile] of Object.entries(scenario.profiles)) {
     if (profileId !== profile.id) {
-      context.addIssue({
-        code: 'custom',
-        path: ['profiles', profileId, 'id'],
-        message: 'Profile map key must match profile ID',
-      })
+      context.addIssue({ code: 'custom', path: ['profiles', profileId, 'id'], message: 'Profile map key must match profile ID' })
     }
   }
-})
+}
+
+const ScenarioV1Schema = ScenarioV1ObjectSchema.superRefine(validateScenarioReferences)
+
+const ScenarioSchema: z.ZodType<Scenario> = ScenarioV1ObjectSchema.extend({
+  planning: ScenarioPlanningSchema,
+}).strict().superRefine(validateScenarioReferences)
+
+function validateAppDataReferences(
+  data: { baselineScenarioId: string; activeScenarioId: string; scenarios: Record<string, { id: string }> },
+  context: z.RefinementCtx,
+): void {
+  if (!hasOwnKey(data.scenarios, data.baselineScenarioId)) {
+    context.addIssue({ code: 'custom', path: ['baselineScenarioId'], message: 'Baseline scenario does not exist' })
+  }
+  if (!hasOwnKey(data.scenarios, data.activeScenarioId)) {
+    context.addIssue({ code: 'custom', path: ['activeScenarioId'], message: 'Active scenario does not exist' })
+  }
+  for (const [scenarioId, scenario] of Object.entries(data.scenarios)) {
+    if (scenarioId !== scenario.id) {
+      context.addIssue({ code: 'custom', path: ['scenarios', scenarioId, 'id'], message: 'Scenario map key must match scenario ID' })
+    }
+  }
+}
 
 export const AppSettingsSchema: z.ZodType<AppSettings> = z.object({
   currencyCode: z.enum(SUPPORTED_CURRENCY_CODES),
 }).strict()
 
 export const AppDataSchema: z.ZodType<AppData> = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   baselineScenarioId: IdentifierSchema,
   activeScenarioId: IdentifierSchema,
   scenarios: z.record(IdentifierSchema, ScenarioSchema),
   settings: AppSettingsSchema,
-}).strict().superRefine((data, context) => {
-  if (!hasOwnKey(data.scenarios, data.baselineScenarioId)) {
-    context.addIssue({
-      code: 'custom',
-      path: ['baselineScenarioId'],
-      message: 'Baseline scenario does not exist',
-    })
-  }
+}).strict().superRefine(validateAppDataReferences)
 
-  if (!hasOwnKey(data.scenarios, data.activeScenarioId)) {
-    context.addIssue({
-      code: 'custom',
-      path: ['activeScenarioId'],
-      message: 'Active scenario does not exist',
-    })
-  }
+export const AppDataV1Schema = z.object({
+  schemaVersion: z.literal(1),
+  baselineScenarioId: IdentifierSchema,
+  activeScenarioId: IdentifierSchema,
+  scenarios: z.record(IdentifierSchema, ScenarioV1Schema),
+  settings: AppSettingsSchema,
+}).strict().superRefine(validateAppDataReferences)
 
-  for (const [scenarioId, scenario] of Object.entries(data.scenarios)) {
-    if (scenarioId !== scenario.id) {
-      context.addIssue({
-        code: 'custom',
-        path: ['scenarios', scenarioId, 'id'],
-        message: 'Scenario map key must match scenario ID',
-      })
-    }
-  }
-})
+export function migrateAppDataV1ToV2(input: unknown): AppData {
+  const oldData = AppDataV1Schema.parse(input)
+  const scenarios = Object.fromEntries(Object.entries(oldData.scenarios).map(([id, scenario]) => [
+    id,
+    { ...scenario, planning: { openingBalanceCents: 0, savingsGoals: [] } },
+  ]))
+  return AppDataSchema.parse({ ...oldData, schemaVersion: 2, scenarios })
+}

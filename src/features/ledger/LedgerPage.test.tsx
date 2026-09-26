@@ -276,14 +276,17 @@ describe('ledger and profile editors', () => {
 
   it('adds, renames, selects, and protects participant profiles while confirming profile removal', async () => {
     await mountLedger()
-    await setValue(labelledControl('New profile name'), 'Third profile')
+    await setValue(labelledControl('Profile name'), 'Third profile')
     await click(button('Add profile'))
 
     let scenario = useAppStore.getState().scenarios[useAppStore.getState().activeScenarioId]
     if (!scenario) throw new Error('Active scenario is missing')
     let thirdProfile = Object.values(scenario.profiles).find((profile) => profile.name === 'Third profile')
     if (!thirdProfile) throw new Error('New profile was not added')
-    await setValue(labelledControl('Name for Third profile'), 'Renamed profile')
+    const profileNameInput = Array.from(container.querySelectorAll<HTMLInputElement>('input'))
+      .find((candidate) => candidate.value === 'Third profile')
+    if (!profileNameInput) throw new Error('New profile name input was not found')
+    await setValue(profileNameInput, 'Renamed profile')
     await click(button('Save name for Third profile'))
     scenario = useAppStore.getState().scenarios[useAppStore.getState().activeScenarioId]
     thirdProfile = scenario?.profiles[thirdProfile.id]

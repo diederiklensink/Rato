@@ -63,6 +63,14 @@ export interface ForecastAssumptions {
   expenseInflationByCategory: Record<CategoryId, number>;
 }
 
+export interface SavingsGoal {
+  id: string;
+  name: string;
+  targetCents: number;
+  savedCents: number;
+  targetDate: ISODate;
+}
+
 export interface Scenario {
   id: ScenarioId;
   name: string;
@@ -74,6 +82,10 @@ export interface Scenario {
   joint: Ledger;
   calculationMode: CalculationMode;
   forecastAssumptions: ForecastAssumptions;
+  planning: {
+    openingBalanceCents: number;
+    savingsGoals: SavingsGoal[];
+  };
 }
 
 export interface AppSettings {
@@ -81,7 +93,7 @@ export interface AppSettings {
 }
 
 export interface AppData {
-  schemaVersion: 1;
+  schemaVersion: 2;
   baselineScenarioId: ScenarioId;
   activeScenarioId: ScenarioId;
   scenarios: Record<ScenarioId, Scenario>;
@@ -180,10 +192,10 @@ For a month, sum each selected partner's personal income and expenses, plus join
 | 50/50 | Half of net joint cost for each partner. |
 | Equal remainder | Let `available = personal income - personal expenses`. Contribution is `available - (sum of both available amounts - net joint cost) / 2`. This equalizes discretionary money after all expenses and contributions. |
 
-Round the first participant's contribution to integer cents, then set the second to `netJointCostCents - firstContributionCents`. `discretionaryCents = incomeCents - personalExpenseCents - contributionCents`. Preserve negative transfers and deficits. Forecast charts show projected cash flows. A wealth chart requires a separate opening-balance model and is outside this initial contract.
+Round the first participant's contribution to integer cents, then set the second to `netJointCostCents - firstContributionCents`. `discretionaryCents = incomeCents - personalExpenseCents - contributionCents`. Preserve negative transfers and deficits. Forecast charts show projected cash flows. Planning also stores a scenario-level opening household balance for a date-based three-month cash-flow projection; it does not affect settlement.
 
 ## Persistence and module boundaries
 
-`src/store/useAppStore.ts` uses `persist` with `createJSONStorage` and a `localforage` adapter forced to IndexedDB. Persist only `AppData`, never actions, derived results, or `AppRuntimeState`. Use persistence version 1 and reject unknown versions until an explicit migration is added. Seed and save a baseline with two generic empty profiles, such as “Partner 1” and “Partner 2”. Validate action inputs and update immutably. If saved data cannot be parsed or validated, block writes and show recovery controls; retry keeps stored data intact, while reset is an explicit operation that clears this app's key before seeding a fresh baseline.
+`src/store/useAppStore.ts` uses `persist` with `createJSONStorage` and a `localforage` adapter forced to IndexedDB. Persist only `AppData`, never actions, derived results, or `AppRuntimeState`. Persistence and backup schema version 2 migrates version 1 scenarios by adding a zero opening balance and no savings goals. Reject unknown versions. Seed and save a baseline with two generic empty profiles, such as “Partner 1” and “Partner 2”. Validate action inputs and update immutably. If saved data cannot be parsed or validated, block writes and show recovery controls; retry keeps stored data intact, while reset is an explicit operation that clears this app's key before seeding a fresh baseline.
 
 `src/utils/recurrence.ts` finds occurrences; `src/utils/calculations.ts` aggregates ledgers and computes settlement; `src/utils/forecast.ts` projects future months. `src/utils/importExport.ts` exports only `AppData`, validates parsed imports and schema version, then calls `replaceData` only after success. The existing `docs/calculation_engine.md` is an early draft; reconcile it with this contract during the calculation phase.

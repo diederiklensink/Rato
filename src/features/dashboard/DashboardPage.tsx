@@ -9,7 +9,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { categoryLabel } from '../../constants/categories'
 import { currentLocalYearMonth, isYearMonth } from '../../routes/monthQuery'
 import { useSearchParams } from 'react-router-dom'
-import { buildCategoryLedgerBreakdown } from './dashboardData'
+import { buildCategoryLedgerBreakdown, rankExpenseCategories } from './dashboardData'
 import type { CategoryLedgerBreakdownRow } from './dashboardData'
 import { intlLocale, translateMessage } from '../../i18n'
 
@@ -126,21 +126,59 @@ function ProfileSettlementCard({
 function CategoryBreakdown({
   rows,
   formatCurrency,
+  locale,
+  month,
 }: {
   rows: CategoryLedgerBreakdownRow[];
   formatCurrency: (cents: number) => string;
+  locale: string;
+  month: string;
 }) {
   const { t } = useTranslation()
+  const ranked = rankExpenseCategories(rows)
+  const percentFormatter = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 1 })
   return (
-    <section aria-labelledby="breakdown-heading">
-      <details className="group rounded-2xl border border-border bg-surface shadow-sm">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-2xl p-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:p-5 [&::-webkit-details-marker]:hidden">
-          <span className="min-w-0">
-            <span aria-level={2} className="block text-lg font-semibold tracking-tight" id="breakdown-heading" role="heading">{t('Categories')}</span>
-          </span>
-          <ChevronDown aria-hidden="true" className="shrink-0 text-muted transition-transform group-open:rotate-180" size={20} />
+    <section aria-labelledby="breakdown-heading" className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight" id="breakdown-heading">{t('Categories')}</h2>
+          <p className="mt-0.5 text-sm text-muted">{t('Expense categories for {{month}}', { month: formatMonth(month, { month: 'long', year: 'numeric' }, locale) })}</p>
+        </div>
+        <span className="text-sm tabular-nums text-muted">{formatCurrency(ranked.totalExpensesCents)} {t('total expenses')}</span>
+      </div>
+      {ranked.categories.length === 0 ? (
+        <p className="mt-4 rounded-lg bg-background p-4 text-sm text-muted">{t('No expenses occur in this month.')}</p>
+      ) : (
+        <ul aria-label={t('Largest expense categories')} className="mt-4 space-y-3">
+          {ranked.categories.map((category) => {
+            const share = ranked.totalExpensesCents === 0 ? 0 : category.expenseCents / ranked.totalExpensesCents
+            const label = t(category.grouped ? 'Other categories' : categoryLabel(category.categoryId, (key) => t(key)))
+            return (
+              <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5" key={category.grouped ? 'other-group' : category.categoryId}>
+                <span className="truncate text-sm font-medium">{label}</span>
+                <span className="text-sm font-semibold tabular-nums">{formatCurrency(category.expenseCents)}</span>
+                <div
+                  aria-label={t('{{category}}: {{share}} of expenses', { category: label, share: percentFormatter.format(share) })}
+                  aria-valuemax={100}
+                  aria-valuemin={0}
+                  aria-valuenow={share * 100}
+                  className="h-2 overflow-hidden rounded-full bg-background"
+                  role="progressbar"
+                >
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(share * 100, 1)}%` }} />
+                </div>
+                <span className="text-right text-xs tabular-nums text-muted">{percentFormatter.format(share)}</span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      <details className="group mt-4 border-t border-border pt-3">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-lg py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
+          <span>{t('Income and expense details')}</span>
+          <ChevronDown aria-hidden="true" className="shrink-0 text-muted transition-transform group-open:rotate-180" size={18} />
         </summary>
-        <div className="border-t border-border p-4 sm:p-6">
+        <div className="pt-2">
           {rows.length === 0 ? (
             <p className="rounded-lg bg-background p-4 text-sm text-muted">{t('No income or expenses occur in this month.')}</p>
           ) : (
@@ -522,7 +560,7 @@ export default function DashboardPage() {
         <>
           {breakdownResult.error && <ErrorNotice message={t('Category breakdown could not be calculated: {{error}}', { error: translateMessage(breakdownResult.error, t) })} />}
           {breakdownResult.value && (
-            <CategoryBreakdown rows={breakdownResult.value} formatCurrency={formatCurrency} />
+            <CategoryBreakdown locale={locale} month={selectedMonth} rows={breakdownResult.value} formatCurrency={formatCurrency} />
           )}
 
           {scenario && (
