@@ -1,8 +1,8 @@
 import i18n, { type TFunction } from 'i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 import { initReactI18next } from 'react-i18next'
-import en from './i18n/en'
-import nl from './i18n/nl'
+import en from './i18n/en.json'
+import nl from './i18n/nl.json'
 
 export const resources = {
   en: { translation: en },

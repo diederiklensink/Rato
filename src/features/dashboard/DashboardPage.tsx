@@ -1,5 +1,7 @@
 import { Fragment, Suspense, lazy, useMemo, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 import type { ForecastPoint, ProfileMonthlyResult, Scenario } from '../../types'
 import { calculateSettlement } from '../../utils/calculations'
 import { buildMonthlyForecast } from '../../utils/forecast'
@@ -84,20 +86,6 @@ function ErrorNotice({ message }: { message: string }) {
   )
 }
 
-function SummaryCard({ label, value, detail }: {
-  label: string;
-  value: string;
-  detail?: string;
-}) {
-  return (
-    <article className="rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</h3>
-      <p className="mt-2 text-2xl font-semibold tracking-tight text-foreground">{value}</p>
-      {detail && <p className="mt-1 text-xs leading-5 text-muted">{detail}</p>}
-    </article>
-  )
-}
-
 function ProfileSettlementCard({
   profileName,
   result,
@@ -108,29 +96,29 @@ function ProfileSettlementCard({
   formatCurrency: (cents: number) => string;
 }) {
   const { t } = useTranslation()
-  const metrics = [
-    { label: 'Income', amount: result.incomeCents },
-    { label: 'Personal expenses', amount: result.personalExpenseCents },
-    { label: 'Contribution to joint', amount: result.contributionCents, signed: true },
-    { label: 'Discretionary cash', amount: result.discretionaryCents, signed: true },
-  ]
+  const contributionLabel = result.contributionCents > 0
+    ? 'Pays into joint'
+    : result.contributionCents < 0
+      ? 'Receives from joint'
+      : 'No joint payment'
 
   return (
-    <article className="rounded-xl border border-border bg-surface p-5 shadow-sm sm:p-6">
-      <h3 className="text-xl font-semibold tracking-tight">{profileName}</h3>
-      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-5">
-        {metrics.map(({ label, amount, signed }) => (
-          <div key={label}>
-            <dt className="text-xs font-medium text-muted">{t(label)}</dt>
-            <dd className="mt-1 font-semibold tabular-nums text-foreground">
-              {signed ? formatSignedCurrency(amount, formatCurrency) : formatCurrency(amount)}
-            </dd>
-          </div>
-        ))}
+    <article className="rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5">
+      <h3 className="text-lg font-semibold tracking-tight">{profileName}</h3>
+      <dl className="mt-3 flex items-baseline justify-between gap-3">
+        <dt className="text-sm font-medium text-muted">{t(contributionLabel)}</dt>
+        <dd className="text-xl font-semibold tabular-nums text-foreground">{formatCurrency(Math.abs(result.contributionCents))}</dd>
       </dl>
-      <p className="mt-4 border-t border-border pt-3 text-xs leading-5 text-muted">
-        {t('A negative contribution means this participant receives money from the joint ledger.')}
-      </p>
+      <dl className="mt-3 flex items-baseline justify-between gap-3 border-t border-border pt-3">
+        <dt className={`text-sm ${result.discretionaryCents < 0 ? 'text-danger' : 'text-muted'}`}>
+          {t(result.discretionaryCents < 0 ? 'Shortfall' : 'Left after bills')}
+        </dt>
+        <dd className={`font-semibold tabular-nums ${result.discretionaryCents < 0 ? 'text-danger' : 'text-foreground'}`}>
+          {result.discretionaryCents < 0
+            ? formatSignedCurrency(result.discretionaryCents, formatCurrency)
+            : formatCurrency(result.discretionaryCents)}
+        </dd>
+      </dl>
     </article>
   )
 }
@@ -144,41 +132,45 @@ function CategoryBreakdown({
 }) {
   const { t } = useTranslation()
   return (
-    <section aria-labelledby="breakdown-heading" className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold tracking-tight" id="breakdown-heading">{t('Income and expense sources')}</h2>
-        <p className="mt-1 text-sm text-muted">
-          {t('Selected-month totals by category and ledger owner. Only settlement participants and the joint ledger are included.')}
-        </p>
-      </div>
-      {rows.length === 0 ? (
-        <p className="rounded-lg bg-background p-4 text-sm text-muted">{t('No income or expenses occur in this month.')}</p>
-      ) : (
-        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={t('Category and ledger ownership breakdown')}>
-          <p className="mb-2 px-3 text-xs text-muted sm:hidden">{t('Swipe horizontally to view all columns.')}</p>
-          <table className="w-full min-w-[36rem] border-collapse text-left text-sm">
-            <caption className="sr-only">{t('Income and expenses grouped by category and settlement ledger owner.')}</caption>
-            <thead>
-              <tr className="border-b border-border text-xs uppercase tracking-wide text-muted">
-                <th className="px-3 py-3 font-semibold" scope="col">{t('Category')}</th>
-                <th className="px-3 py-3 font-semibold" scope="col">{t('Ledger owner')}</th>
-                <th className="px-3 py-3 text-right font-semibold" scope="col">{t('Income')}</th>
-                <th className="px-3 py-3 text-right font-semibold" scope="col">{t('Expenses')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr className="border-b border-border last:border-0" key={row.key}>
-                  <th className="px-3 py-3 font-medium text-foreground" scope="row">{categoryLabel(row.categoryId, (key) => t(key))}</th>
-                  <td className="px-3 py-3 text-muted">{row.ownerKey === 'joint' ? t('Joint ledger') : row.ownerName}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(row.incomeCents)}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(row.expenseCents)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <section aria-labelledby="breakdown-heading">
+      <details className="group rounded-2xl border border-border bg-surface shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-2xl p-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:p-5 [&::-webkit-details-marker]:hidden">
+          <span className="min-w-0">
+            <span aria-level={2} className="block text-lg font-semibold tracking-tight" id="breakdown-heading" role="heading">{t('Categories')}</span>
+          </span>
+          <ChevronDown aria-hidden="true" className="shrink-0 text-muted transition-transform group-open:rotate-180" size={20} />
+        </summary>
+        <div className="border-t border-border p-4 sm:p-6">
+          {rows.length === 0 ? (
+            <p className="rounded-lg bg-background p-4 text-sm text-muted">{t('No income or expenses occur in this month.')}</p>
+          ) : (
+            <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={t('Category and ledger ownership breakdown')}>
+              <p className="mb-2 px-3 text-xs text-muted sm:hidden">{t('Swipe horizontally to view all columns.')}</p>
+              <table className="w-full min-w-[36rem] border-collapse text-left text-sm">
+                <caption className="sr-only">{t('Income and expenses grouped by category and settlement ledger owner.')}</caption>
+                <thead>
+                  <tr className="border-b border-border text-xs uppercase tracking-wide text-muted">
+                    <th className="px-3 py-3 font-semibold" scope="col">{t('Category')}</th>
+                    <th className="px-3 py-3 font-semibold" scope="col">{t('Ledger owner')}</th>
+                    <th className="px-3 py-3 text-right font-semibold" scope="col">{t('Income')}</th>
+                    <th className="px-3 py-3 text-right font-semibold" scope="col">{t('Expenses')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr className="border-b border-border last:border-0" key={row.key}>
+                      <th className="px-3 py-3 font-medium text-foreground" scope="row">{categoryLabel(row.categoryId, (key) => t(key))}</th>
+                      <td className="px-3 py-3 text-muted">{row.ownerKey === 'joint' ? t('Joint ledger') : row.ownerName}</td>
+                      <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(row.incomeCents)}</td>
+                      <td className="px-3 py-3 text-right tabular-nums">{formatCurrency(row.expenseCents)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      )}
+      </details>
     </section>
   )
 }
@@ -190,8 +182,7 @@ function ForecastAssumptions({ scenario, locale }: { scenario: Scenario; locale:
 
   return (
     <aside aria-label={t('Forecast assumptions')} className="rounded-xl border border-border bg-background p-4">
-      <h3 className="text-sm font-semibold text-foreground">{t('Annual assumptions used for projections')}</h3>
-      <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+      <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <dt className="text-xs text-muted">{t('Income growth')}</dt>
           <dd className="mt-0.5 font-medium">{formatRate(scenario.forecastAssumptions.annualIncomeGrowthRate, locale)}</dd>
@@ -326,73 +317,86 @@ function ForecastSection({
   ))
 
   return (
-    <section aria-labelledby="forecast-heading" className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight" id="forecast-heading">{t('Monthly forecast')}</h2>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
-            {t('The selected month is the nominal base. Later months are projections using the assumptions below.')}
-          </p>
-        </div>
-        <div className="w-full sm:w-48">
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="forecast-horizon">
-            {t('Forecast horizon')}
-          </label>
-          <select
-            className="min-h-11 w-full rounded-lg border border-border-strong bg-surface px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-            id="forecast-horizon"
-            onChange={(event) => onHorizonChange(Number(event.currentTarget.value) as ForecastHorizon)}
-            value={horizon}
-          >
-            <option value={6}>{t('6 months')}</option>
-            <option value={12}>{t('12 months')}</option>
-            <option value={24}>{t('24 months')}</option>
-          </select>
-        </div>
-      </div>
+    <section aria-labelledby="forecast-heading">
+      <details className="group rounded-2xl border border-border bg-surface shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-2xl p-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:p-5 [&::-webkit-details-marker]:hidden">
+          <span className="min-w-0">
+            <span aria-level={2} className="block text-lg font-semibold tracking-tight" id="forecast-heading" role="heading">{t('Forecast')}</span>
+          </span>
+          <ChevronDown aria-hidden="true" className="shrink-0 text-muted transition-transform group-open:rotate-180" size={20} />
+        </summary>
+        <div className="space-y-5 border-t border-border p-4 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="w-full sm:w-48">
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="forecast-horizon">
+                {t('Forecast horizon')}
+              </label>
+              <select
+                className="min-h-11 w-full rounded-lg border border-border-strong bg-surface px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                id="forecast-horizon"
+                onChange={(event) => onHorizonChange(Number(event.currentTarget.value) as ForecastHorizon)}
+                value={horizon}
+              >
+                <option value={6}>{t('6 months')}</option>
+                <option value={12}>{t('12 months')}</option>
+                <option value={24}>{t('24 months')}</option>
+              </select>
+            </div>
+          </div>
 
-      <div className="mt-5">
-        <ForecastAssumptions scenario={scenario} locale={locale} />
-      </div>
+          <details className="group/assumptions rounded-xl border border-border bg-background">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+              {t('Forecast assumptions')}
+              <ChevronDown aria-hidden="true" className="shrink-0 text-muted transition-transform group-open/assumptions:rotate-180" size={16} />
+            </summary>
+            <div className="border-t border-border p-4">
+              <ForecastAssumptions scenario={scenario} locale={locale} />
+            </div>
+          </details>
 
-      <figure className="mt-6" aria-labelledby="forecast-chart-title">
-        <h3 className="sr-only" id="forecast-chart-title">{t('Monthly discretionary cash flow by participant')}</h3>
-        {hasDiscretionaryCashToPlot ? (
-          <div
-            aria-label={t('Line chart comparing discretionary cash for {{first}} and {{second}} over {{horizon}} months.', { first: profileNames[0], second: profileNames[1], horizon })}
-            className="h-72 w-full"
-            role="img"
-          >
-            <Suspense fallback={<span className="sr-only" role="status">{t('Loading the forecast chart')}</span>}>
-              <ForecastChart
-                chartData={chartData}
+          <figure aria-labelledby="forecast-chart-title">
+            <h3 className="sr-only" id="forecast-chart-title">{t('Monthly discretionary cash flow by participant')}</h3>
+            {hasDiscretionaryCashToPlot ? (
+              <div
+                aria-label={t('Line chart comparing discretionary cash for {{first}} and {{second}} over {{horizon}} months.', { first: profileNames[0], second: profileNames[1], horizon })}
+                className="h-72 w-full"
+                role="img"
+              >
+                <Suspense fallback={<span className="sr-only" role="status">{t('Loading the forecast chart')}</span>}>
+                  <ForecastChart
+                    chartData={chartData}
+                    formatCurrency={formatCurrency}
+                    formatMonth={(month, format) => formatMonth(month, format, locale)}
+                    profileNames={profileNames}
+                  />
+                </Suspense>
+              </div>
+            ) : (
+              <div className="grid min-h-24 w-full place-items-center rounded-xl bg-background px-4 py-6 text-center text-sm text-muted" role="status">
+                {t('No participant discretionary cash flow to plot for this forecast. Monthly figures are available in the table below.')}
+              </div>
+            )}
+            <figcaption className="mt-2 text-xs leading-5 text-muted">
+              {hasDiscretionaryCashToPlot ? t('Below zero means a deficit.') : t('No chart data.')}
+            </figcaption>
+          </figure>
+
+          <details className="rounded-xl border border-border">
+            <summary className="cursor-pointer rounded-xl px-4 py-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+              {t('Show table')}
+            </summary>
+            <div className="border-t border-border p-3 sm:p-4">
+              <ForecastTable
+                forecast={forecast}
                 formatCurrency={formatCurrency}
-                formatMonth={(month, format) => formatMonth(month, format, locale)}
+                locale={locale}
+                profileIds={[firstProfileId, secondProfileId]}
                 profileNames={profileNames}
               />
-            </Suspense>
-          </div>
-        ) : (
-          <div className="grid min-h-24 w-full place-items-center rounded-xl bg-background px-4 py-6 text-center text-sm text-muted" role="status">
-            {t('No participant discretionary cash flow to plot for this forecast. Monthly figures are available in the table below.')}
-          </div>
-        )}
-        <figcaption className="mt-2 text-xs leading-5 text-muted">
-          {hasDiscretionaryCashToPlot
-            ? t('Values below zero indicate a projected deficit. The table provides the same figures in an accessible format.')
-            : t('The chart appears when the selected participants have nonzero discretionary cash flow.')}
-        </figcaption>
-      </figure>
-
-      <div className="mt-6">
-        <ForecastTable
-          forecast={forecast}
-          formatCurrency={formatCurrency}
-          locale={locale}
-          profileIds={[firstProfileId, secondProfileId]}
-          profileNames={profileNames}
-        />
-      </div>
+            </div>
+          </details>
+        </div>
+      </details>
     </section>
   )
 }
@@ -409,106 +413,138 @@ export default function DashboardPage() {
   const locale = intlLocale(i18n.resolvedLanguage ?? i18n.language)
   const formatCurrency = useMemo(() => createCurrencyFormatter(currencyCode, locale), [currencyCode, locale])
 
-  const settlementResult = useMemo(
-    () => scenario
-      ? safeCalculate(() => calculateSettlement(scenario, selectedMonth))
-      : { value: null, error: 'The active scenario is unavailable.' },
-    [scenario, selectedMonth],
-  )
-  const breakdownResult = useMemo(
-    () => scenario
-      ? safeCalculate(() => buildCategoryLedgerBreakdown(scenario, selectedMonth))
-      : { value: null, error: 'The active scenario is unavailable.' },
-    [scenario, selectedMonth],
-  )
-  const forecastResult = useMemo(
-    () => scenario
-      ? safeCalculate(() => buildMonthlyForecast(scenario, selectedMonth, horizon))
-      : { value: null, error: 'The active scenario is unavailable.' },
-    [scenario, selectedMonth, horizon],
-  )
-
   const firstProfileId = scenario?.participantIds[0]
   const secondProfileId = scenario?.participantIds[1]
   const firstProfile = firstProfileId ? scenario?.profiles[firstProfileId] : undefined
   const secondProfile = secondProfileId ? scenario?.profiles[secondProfileId] : undefined
+  const isEmptyOverview = Boolean(scenario && firstProfile && secondProfile && [
+    firstProfile.ledger,
+    secondProfile.ledger,
+    scenario.joint,
+  ].every((ledger) => ledger.income.length === 0 && ledger.expenses.length === 0))
+
+  const settlementResult = useMemo(
+    () => scenario && !isEmptyOverview
+      ? safeCalculate(() => calculateSettlement(scenario, selectedMonth))
+      : { value: null, error: scenario ? null : 'The active scenario is unavailable.' },
+    [scenario, selectedMonth, isEmptyOverview],
+  )
+  const breakdownResult = useMemo(
+    () => scenario && !isEmptyOverview
+      ? safeCalculate(() => buildCategoryLedgerBreakdown(scenario, selectedMonth))
+      : { value: null, error: null },
+    [scenario, selectedMonth, isEmptyOverview],
+  )
+  const forecastResult = useMemo(
+    () => scenario && !isEmptyOverview
+      ? safeCalculate(() => buildMonthlyForecast(scenario, selectedMonth, horizon))
+      : { value: null, error: null },
+    [scenario, selectedMonth, horizon, isEmptyOverview],
+  )
+
   const settlement = settlementResult.value
   const firstSettlement = firstProfileId ? settlement?.byProfile[firstProfileId] : undefined
   const secondSettlement = secondProfileId ? settlement?.byProfile[secondProfileId] : undefined
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-5 sm:space-y-6">
       <section aria-labelledby="overview-heading">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary-dark">{t('Settlement overview')}</p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight" id="overview-heading">{scenario?.name ?? t('Overview')}</h1>
-            <p className="mt-2 text-sm text-muted">
-              {formatMonth(selectedMonth, { month: 'long', year: 'numeric' }, locale)}
-              {scenario && <> · {t(modeLabel(scenario.calculationMode))} {t('settlement')}</>}
-            </p>
-          </div>
-          <p className="text-xs text-muted">{t('Calculated from the selected participants and joint ledger.')}</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight" id="overview-heading">{t('Overview')}</h1>
+          {scenario && <span className="rounded-full bg-surface px-3 py-1.5 text-xs font-medium text-muted">{t(modeLabel(scenario.calculationMode))}</span>}
         </div>
 
-        {settlementResult.error && <div className="mt-5"><ErrorNotice message={t('Settlement could not be calculated: {{error}}', { error: translateMessage(settlementResult.error, t) })} /></div>}
-        {settlement && scenario && (
+        {isEmptyOverview ? (
+          <div className="mt-5 flex flex-col items-start gap-4 rounded-2xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">{t('Start with your ledger')}</h2>
+              <p className="mt-1 text-sm text-muted">{t('Add income, expenses and shared costs to see your overview.')}</p>
+            </div>
+            <Link
+              className="inline-flex min-h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              to={`/editor?month=${selectedMonth}`}
+            >
+              {t('Open ledger')}
+            </Link>
+          </div>
+        ) : (
           <>
-            <h2 className="sr-only">{t('Selected month joint totals')}</h2>
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <SummaryCard label={t('Joint income')} value={formatCurrency(settlement.jointIncomeCents)} />
-              <SummaryCard label={t('Joint expenses')} value={formatCurrency(settlement.jointExpenseCents)} />
-              <SummaryCard
-                detail={t('Joint expenses minus joint income')}
-                label={t('Net joint cost')}
-                value={formatSignedCurrency(settlement.netJointCostCents, formatCurrency)}
-              />
-            </div>
+            {settlementResult.error && <div className="mt-5"><ErrorNotice message={t('Settlement could not be calculated: {{error}}', { error: translateMessage(settlementResult.error, t) })} /></div>}
+            {settlement && scenario && (
+              <>
+                <h2 className="sr-only">{t('Selected month joint totals')}</h2>
+                <article className="mt-5 rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
+                  <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(14rem,auto)] sm:items-center">
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{t('Net joint cost')}</h3>
+                      <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
+                        {formatCurrency(settlement.netJointCostCents)}
+                      </p>
+                    </div>
+                    <dl className="grid grid-cols-2 gap-4 border-t border-border pt-4 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
+                      <div>
+                        <dt className="text-xs font-medium text-muted">{t('Joint income')}</dt>
+                        <dd className="mt-1 font-semibold tabular-nums text-foreground">{formatCurrency(settlement.jointIncomeCents)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-medium text-muted">{t('Joint expenses')}</dt>
+                        <dd className="mt-1 font-semibold tabular-nums text-foreground">{formatCurrency(settlement.jointExpenseCents)}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                </article>
 
-            <h2 className="sr-only">{t('Selected participant settlement details')}</h2>
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              {firstProfile && firstProfileId && firstSettlement && (
-                <ProfileSettlementCard
-                  formatCurrency={formatCurrency}
-                  profileName={firstProfile.name}
-                  result={firstSettlement}
-                />
-              )}
-              {secondProfile && secondProfileId && secondSettlement && (
-                <ProfileSettlementCard
-                  formatCurrency={formatCurrency}
-                  profileName={secondProfile.name}
-                  result={secondSettlement}
-                />
-              )}
-            </div>
+                <h2 className="sr-only">{t('Selected participant settlement details')}</h2>
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  {firstProfile && firstProfileId && firstSettlement && (
+                    <ProfileSettlementCard
+                      formatCurrency={formatCurrency}
+                      profileName={firstProfile.name}
+                      result={firstSettlement}
+                    />
+                  )}
+                  {secondProfile && secondProfileId && secondSettlement && (
+                    <ProfileSettlementCard
+                      formatCurrency={formatCurrency}
+                      profileName={secondProfile.name}
+                      result={secondSettlement}
+                    />
+                  )}
+                </div>
+              </>
+            )}
           </>
         )}
+
       </section>
 
-      {breakdownResult.error && <ErrorNotice message={t('Category breakdown could not be calculated: {{error}}', { error: translateMessage(breakdownResult.error, t) })} />}
-      {breakdownResult.value && (
-        <CategoryBreakdown rows={breakdownResult.value} formatCurrency={formatCurrency} />
-      )}
-
-      {scenario && (
-        <section>
-          {forecastResult.error ? (
-            <div aria-labelledby="forecast-heading" className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
-              <h2 className="mb-4 text-2xl font-semibold tracking-tight" id="forecast-heading">{t('Monthly forecast')}</h2>
-              <ErrorNotice message={t('Forecast could not be calculated: {{error}}', { error: translateMessage(forecastResult.error, t) })} />
-            </div>
-          ) : forecastResult.value && (
-            <ForecastSection
-              formatCurrency={formatCurrency}
-              forecast={forecastResult.value}
-              horizon={horizon}
-              locale={locale}
-              onHorizonChange={setHorizon}
-              scenario={scenario}
-            />
+      {!isEmptyOverview && (
+        <>
+          {breakdownResult.error && <ErrorNotice message={t('Category breakdown could not be calculated: {{error}}', { error: translateMessage(breakdownResult.error, t) })} />}
+          {breakdownResult.value && (
+            <CategoryBreakdown rows={breakdownResult.value} formatCurrency={formatCurrency} />
           )}
-        </section>
+
+          {scenario && (
+            <section>
+              {forecastResult.error ? (
+                <div aria-labelledby="forecast-heading" className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
+                  <h2 className="mb-4 text-2xl font-semibold tracking-tight" id="forecast-heading">{t('Monthly forecast')}</h2>
+                  <ErrorNotice message={t('Forecast could not be calculated: {{error}}', { error: translateMessage(forecastResult.error, t) })} />
+                </div>
+              ) : forecastResult.value && (
+                <ForecastSection
+                  formatCurrency={formatCurrency}
+                  forecast={forecastResult.value}
+                  horizon={horizon}
+                  locale={locale}
+                  onHorizonChange={setHorizon}
+                  scenario={scenario}
+                />
+              )}
+            </section>
+          )}
+        </>
       )}
     </div>
   )

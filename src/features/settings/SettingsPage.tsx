@@ -1,6 +1,6 @@
 import { useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Download, FileUp, Save, Upload } from 'lucide-react'
+import { ChevronDown, Download, FileUp, Save, Upload } from 'lucide-react'
 import type { AppData, CalculationMode, ForecastAssumptions, Scenario } from '../../types'
 import { SUPPORTED_CURRENCIES } from '../../constants/currencies'
 import { categoryLabel } from '../../constants/categories'
@@ -81,18 +81,14 @@ function SectionMessage({ message, error = false }: { message: string; error?: b
   )
 }
 
-function SectionCard({ title, description, children }: {
+function SectionCard({ title, children }: {
   title: string;
-  description: string;
   children: ReactNode;
 }) {
   const { t } = useTranslation()
   return (
-    <section aria-labelledby={`${title.toLowerCase().replaceAll(' ', '-')}-heading`} className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
-      <div className="mb-5">
-        <h2 className="text-xl font-semibold tracking-tight" id={`${title.toLowerCase().replaceAll(' ', '-')}-heading`}>{t(title)}</h2>
-        <p className="mt-1 max-w-3xl text-sm leading-6 text-muted">{t(description)}</p>
-      </div>
+    <section aria-labelledby={`${title.toLowerCase().replaceAll(' ', '-')}-heading`} className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
+      <h2 className="mb-3 text-xl font-semibold tracking-tight" id={`${title.toLowerCase().replaceAll(' ', '-')}-heading`}>{t(title)}</h2>
       {children}
     </section>
   )
@@ -279,22 +275,15 @@ function SettingsEditor({
   }
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-4 sm:space-y-5">
       <header>
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary-dark">{t('Preferences')}</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">{t('Settings')}</h1>
-        <p className="mt-2 text-sm leading-6 text-muted">
-          {t('Scenario settings apply to {{name}}. Currency applies across this app.', { name: scenario.name })}
-        </p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('Settings')}</h1>
       </header>
 
-      <SectionCard
-        description="Choose how this scenario shares its net joint cost between the selected participants."
-        title="Calculation mode"
-      >
+      <SectionCard title="Split method">
         <form className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={saveCalculationMode}>
           <div>
-            <label className="mb-1.5 block text-sm font-medium" htmlFor="calculation-mode">{t('Settlement method')}</label>
+            <label className="sr-only" htmlFor="calculation-mode">{t('Settlement method')}</label>
             <select className={inputClassName} id="calculation-mode" onChange={(event) => {
               setModeDraft(event.currentTarget.value as CalculationMode)
               setModeMessage(null)
@@ -305,16 +294,19 @@ function SettingsEditor({
               <option value="equal_remainder">{t('Equal remainder after personal expenses')}</option>
             </select>
           </div>
-          <button className={buttonClassName} type="submit"><Save aria-hidden="true" size={16} />{t('Save mode')}</button>
+          <button aria-label={t('Save mode')} className={buttonClassName} type="submit"><Save aria-hidden="true" size={16} />{t('Save')}</button>
         </form>
         {modeMessage && <div className="mt-3"><SectionMessage message={modeMessage} /></div>}
         {modeError && <div className="mt-3"><SectionMessage error message={modeError} /></div>}
       </SectionCard>
 
-      <SectionCard
-        description="Annual assumptions are percentages. Leave a category override blank to use the general expense inflation rate."
-        title="Forecast assumptions"
-      >
+      <section aria-labelledby="forecast-assumptions-heading">
+        <details className="group rounded-2xl border border-border bg-surface shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-2xl p-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:p-5 [&::-webkit-details-marker]:hidden">
+            <h2 className="text-xl font-semibold tracking-tight" id="forecast-assumptions-heading">{t('Forecast assumptions')}</h2>
+            <ChevronDown aria-hidden="true" className="shrink-0 text-muted transition-transform group-open:rotate-180" size={20} />
+          </summary>
+          <div className="border-t border-border p-4 sm:p-5">
         <form className="space-y-5" onSubmit={saveForecast}>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
@@ -350,99 +342,100 @@ function SettingsEditor({
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold">{t('Expense category overrides')}</h3>
-            {categoryIds.length === 0 ? (
-              <p className="mt-2 rounded-lg bg-background p-3 text-sm text-muted">
-                {t('Add an expense in the Ledger to create a category-specific override.')}
-              </p>
-            ) : (
-              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {categoryIds.map((categoryId) => {
-                  const fieldId = `category-rate-${categoryIds.indexOf(categoryId)}`
-                  const errorId = `${fieldId}-error`
-                  const error = forecastErrors[`category:${categoryId}`]
-                  return (
-                    <div className="rounded-xl border border-border bg-background p-3" key={categoryId}>
-                      <label className="mb-1.5 block text-sm font-medium" htmlFor={fieldId}>{categoryLabel(categoryId, (key) => t(key))} (%)</label>
-                      <input
-                        aria-describedby={error ? errorId : undefined}
-                        aria-invalid={Boolean(error)}
-                        className={inputClassName}
-                        id={fieldId}
-                        inputMode="decimal"
-                        onChange={(event) => updateCategoryDraft(categoryId, event.currentTarget.value)}
-                        placeholder={t('Use general rate')}
-                        step="any"
-                        type="number"
-                        value={forecastDraft.expenseInflationByCategory[categoryId] ?? ''}
-                      />
-                      <FieldError id={errorId} message={error} />
+            <details className="group/overrides rounded-xl border border-border">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                {t('Category overrides')}
+                <ChevronDown aria-hidden="true" className="shrink-0 text-muted transition-transform group-open/overrides:rotate-180" size={16} />
+              </summary>
+              <div className="border-t border-border p-3 sm:p-4">
+                {categoryIds.length === 0 ? (
+                  <p className="text-sm text-muted">{t('Add an expense in the Ledger to create a category-specific override.')}</p>
+                ) : (
+                  <>
+                    <p className="mb-3 text-xs text-muted">{t('Leave blank to use the general rate.')}</p>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {categoryIds.map((categoryId) => {
+                        const fieldId = `category-rate-${categoryIds.indexOf(categoryId)}`
+                        const errorId = `${fieldId}-error`
+                        const error = forecastErrors[`category:${categoryId}`]
+                        return (
+                          <div className="rounded-xl border border-border bg-background p-3" key={categoryId}>
+                            <label className="mb-1.5 block text-sm font-medium" htmlFor={fieldId}>{categoryLabel(categoryId, (key) => t(key))} (%)</label>
+                            <input
+                              aria-describedby={error ? errorId : undefined}
+                              aria-invalid={Boolean(error)}
+                              className={inputClassName}
+                              id={fieldId}
+                              inputMode="decimal"
+                              onChange={(event) => updateCategoryDraft(categoryId, event.currentTarget.value)}
+                              step="any"
+                              type="number"
+                              value={forecastDraft.expenseInflationByCategory[categoryId] ?? ''}
+                            />
+                            <FieldError id={errorId} message={error} />
+                          </div>
+                        )
+                      })}
                     </div>
-                  )
-                })}
+                  </>
+                )}
               </div>
-            )}
+            </details>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <button className={buttonClassName} type="submit"><Save aria-hidden="true" size={16} />{t('Save forecast assumptions')}</button>
+            <button aria-label={t('Save forecast assumptions')} className={buttonClassName} type="submit"><Save aria-hidden="true" size={16} />{t('Save')}</button>
             {forecastMessage && <SectionMessage message={forecastMessage} />}
             {forecastActionError && <SectionMessage error message={forecastActionError} />}
           </div>
         </form>
-      </SectionCard>
+          </div>
+        </details>
+      </section>
 
-      <SectionCard
-        description="The selected currency changes how amounts are displayed. Rato does not convert stored values or use exchange rates."
-        title="App currency"
-      >
-        <form className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={saveCurrency}>
+      <SectionCard title="Display">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <form className="grid gap-3" onSubmit={saveCurrency}>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium" htmlFor="app-currency">{t('Currency')}</label>
+              <select className={inputClassName} id="app-currency" onChange={(event) => {
+                setCurrencyDraft(event.currentTarget.value)
+                setCurrencyMessage(null)
+                setCurrencyError(null)
+              }} value={currencyDraft}>
+                {SUPPORTED_CURRENCIES.map(({ code, label }) => (
+                  <option key={code} value={code}>{t(label)} ({code})</option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-xs text-muted">{t('Display only; amounts are not converted.')}</p>
+            </div>
+            <button aria-label={t('Save currency')} className={`${buttonClassName} justify-self-start`} type="submit"><Save aria-hidden="true" size={16} />{t('Save')}</button>
+            {currencyMessage && <SectionMessage message={currencyMessage} />}
+            {currencyError && <SectionMessage error message={currencyError} />}
+          </form>
+
           <div>
-            <label className="mb-1.5 block text-sm font-medium" htmlFor="app-currency">{t('Currency')}</label>
-            <select className={inputClassName} id="app-currency" onChange={(event) => {
-              setCurrencyDraft(event.currentTarget.value)
-              setCurrencyMessage(null)
-              setCurrencyError(null)
-            }} value={currencyDraft}>
-              {SUPPORTED_CURRENCIES.map(({ code, label }) => (
-                <option key={code} value={code}>{t(label)} ({code})</option>
-              ))}
+            <label className="mb-1.5 block text-sm font-medium" htmlFor="app-language">{t('Language')}</label>
+            <select
+              className={inputClassName}
+              id="app-language"
+              onChange={(event) => void activeI18n.changeLanguage(event.currentTarget.value)}
+              value={languageCode(activeI18n.resolvedLanguage ?? activeI18n.language)}
+            >
+              <option value="en">English</option>
+              <option value="nl">Nederlands</option>
             </select>
           </div>
-          <button className={buttonClassName} type="submit"><Save aria-hidden="true" size={16} />{t('Save currency')}</button>
-        </form>
-        {currencyMessage && <div className="mt-3"><SectionMessage message={currencyMessage} /></div>}
-        {currencyError && <div className="mt-3"><SectionMessage error message={currencyError} /></div>}
-      </SectionCard>
-
-      <SectionCard
-        description="Choose the language used for labels, dates, and numbers in Rato."
-        title="Language"
-      >
-        <div className="max-w-sm">
-          <label className="mb-1.5 block text-sm font-medium" htmlFor="app-language">{t('Language')}</label>
-          <select
-            className={inputClassName}
-            id="app-language"
-            onChange={(event) => void activeI18n.changeLanguage(event.currentTarget.value)}
-            value={languageCode(activeI18n.resolvedLanguage ?? activeI18n.language)}
-          >
-            <option value="en">English</option>
-            <option value="nl">Nederlands</option>
-          </select>
         </div>
       </SectionCard>
 
-      <SectionCard
-        description="Download a portable copy of all scenarios and settings, or restore from a previous Rato backup. Backups stay on this device unless you choose where to save or share the file."
-        title="Backup and restore"
-      >
+      <SectionCard title="Backup and restore">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <button className={buttonClassName} onClick={exportBackup} type="button">
-            <Download aria-hidden="true" size={16} />{t('Download JSON backup')}
+            <Download aria-hidden="true" size={16} />{t('Download backup')}
           </button>
           <label className={`${secondaryButtonClassName} cursor-pointer focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-primary ${backupBusy ? 'cursor-wait opacity-50' : ''}`} htmlFor="backup-file">
-            <FileUp aria-hidden="true" size={16} />{t('Choose backup file')}
+            <FileUp aria-hidden="true" size={16} />{t('Import backup')}
             <input
               accept=".json,application/json"
               className="sr-only"

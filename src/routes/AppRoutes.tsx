@@ -48,6 +48,7 @@ function roleForScenario(scenario: Scenario, baselineScenarioId: ScenarioId): st
 
 function AppLayout() {
   const { t } = useTranslation()
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeScenarioId = useAppStore((state) => state.activeScenarioId)
   const baselineScenarioId = useAppStore((state) => state.baselineScenarioId)
@@ -64,6 +65,7 @@ function AppLayout() {
   const [scenarioFormMode, setScenarioFormMode] = useState<ScenarioFormMode>(null)
   const [scenarioName, setScenarioName] = useState('')
   const [scenarioError, setScenarioError] = useState<string | null>(null)
+  const showMonth = location.pathname === '/' || location.pathname === '/editor'
 
   useEffect(() => {
     const monthValues = searchParams.getAll('month')
@@ -157,22 +159,17 @@ function AppLayout() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap items-center gap-3">
-            <Link className="flex items-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary" to={`/${routeSearch}`}>
-              <img alt={t('Rato, household finance')} className="h-12 w-auto" height="56" src={`${import.meta.env.BASE_URL}logo.svg`} width="204" />
+        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+            <Link className="flex shrink-0 items-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary" to={`/${routeSearch}`}>
+              <img alt={t('Rato, household finance')} className="h-9 w-auto" height="56" src={`${import.meta.env.BASE_URL}logo.svg`} width="204" />
             </Link>
-            <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary">
-              <Check aria-hidden="true" size={14} />
-              {t('Saved on this device')}
-            </span>
-          </div>
 
-          <nav aria-label={t('Primary navigation')} className="flex flex-wrap gap-2 border-b border-border pb-4">
+            <nav aria-label={t('Primary navigation')} className="ml-auto flex flex-wrap items-center gap-1">
             {navigation.map(({ path, label, icon: Icon, end }) => (
               <NavLink
                 className={({ isActive }) => [
-                  'inline-flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                  'inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:px-3',
                   isActive
                     ? 'bg-primary/10 text-primary'
                     : 'text-muted hover:bg-surface-hover hover:text-foreground',
@@ -185,29 +182,29 @@ function AppLayout() {
                 {t(label)}
               </NavLink>
             ))}
-          </nav>
+            </nav>
+          </div>
 
-          <section aria-label={t('Workspace controls')} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(13rem,0.45fr)] sm:items-end">
-            <div className="max-w-sm">
-              <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="selected-month">
-                <CalendarDays aria-hidden="true" size={14} />
-                {t('Selected month')}
+          <section aria-label={t('Workspace controls')} className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+            {showMonth && (
+              <label className="flex items-center gap-2 text-sm font-medium text-muted" htmlFor="selected-month">
+                <CalendarDays aria-hidden="true" size={16} />
+                <span>{t('Month')}</span>
+                <input
+                  className="min-h-10 w-44 rounded-lg border border-border-strong bg-background px-3 text-sm font-medium text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  id="selected-month"
+                  onChange={(event) => updateMonth(event.currentTarget.value)}
+                  type="month"
+                  value={selectedMonth}
+                />
               </label>
-              <input
-                className="min-h-11 w-full rounded-lg border border-border-strong bg-surface px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                id="selected-month"
-                onChange={(event) => updateMonth(event.currentTarget.value)}
-                type="month"
-                value={selectedMonth}
-              />
-            </div>
+            )}
 
-            <details className="relative z-20 min-w-0 sm:justify-self-end sm:w-full sm:max-w-md">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-3 text-sm text-muted hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
-                <span className="font-medium text-foreground">{t('Scenarios')}</span>
-                <span aria-hidden="true">·</span>
-                <span className="min-w-0 flex-1 truncate">{activeScenario.name}</span>
-                <span className="text-xs">{t(isBaseline ? 'Baseline' : 'Sandbox')}</span>
+            <details className="relative z-20 min-w-0 w-full sm:ml-auto sm:w-auto sm:max-w-md">
+              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-3 text-sm text-muted hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                <span className="sr-only">{t('Active scenario')}</span>
+                <span className="min-w-0 flex-1 truncate font-medium text-foreground">{activeScenario.name}</span>
+                <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs">{t(isBaseline ? 'Baseline' : 'Sandbox')}</span>
                 <ChevronDown aria-hidden="true" className="shrink-0" size={16} />
               </summary>
 
@@ -311,7 +308,7 @@ function AppLayout() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <Outlet />
       </main>
     </div>
@@ -322,15 +319,13 @@ function NotFoundPage() {
   const location = useLocation()
   const { t } = useTranslation()
   return (
-    <section className="rounded-2xl border border-border bg-surface p-6 shadow-sm sm:p-9">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary-dark">{t('Page not found')}</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t('That Rato page does not exist')}</h1>
-      <p className="mt-3 text-sm leading-6 text-muted">{t('Check the address or return to your overview.')}</p>
+    <section className="rounded-2xl border border-border bg-surface p-6 shadow-sm sm:p-8">
+      <h1 className="text-2xl font-semibold tracking-tight">{t('Page not found')}</h1>
       <Link
-        className="mt-6 inline-flex min-h-11 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="mt-4 inline-flex min-h-10 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         to={`/${location.search}`}
       >
-        {t('Go to overview')}
+        {t('Overview')}
       </Link>
     </section>
   )

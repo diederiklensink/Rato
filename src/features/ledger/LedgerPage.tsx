@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   Copy,
+  Pencil,
   Plus,
   Save,
   Trash2,
@@ -21,6 +22,7 @@ import type {
 } from '../../types'
 import { categoryIdFromInput, categoryLabel, LEDGER_CATEGORIES } from '../../constants/categories'
 import { useAppStore } from '../../store/useAppStore'
+import { calculateLedgerTotals } from '../../utils/recurrence'
 import { FinancialItemSchema } from '../../validation/schemas'
 import { currentLocalYearMonth, isYearMonth } from '../../routes/monthQuery'
 import { intlLocale, translateMessage } from '../../i18n'
@@ -164,6 +166,12 @@ function formatDate(value: string, locale: string): string {
   const date = new Date(`${value}T12:00:00`)
   if (Number.isNaN(date.getTime())) return value
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(date)
+}
+
+function formatMonth(value: string, locale: string): string {
+  const date = new Date(`${value}-01T12:00:00`)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(date)
 }
 
 function DraftField({
@@ -319,15 +327,6 @@ function ItemDraftCard({
   )
 }
 
-function ViewField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-xs font-medium text-muted lg:sr-only">{label}</p>
-      <p className="mt-1 break-words text-sm text-foreground lg:mt-0">{value || '—'}</p>
-    </div>
-  )
-}
-
 function ItemRow({
   item,
   currencyCode,
@@ -348,28 +347,27 @@ function ItemRow({
   const { t } = useTranslation()
   const recurrence = item.recurrence
   const recurrenceLabel = frequencyOptions.find(({ value }) => value === recurrence.frequency)?.label ?? recurrence.frequency
-  const endDate = recurrence.frequency === 'once' ? '—' : recurrence.endDate ? formatDate(recurrence.endDate, locale) : t('No end date')
-  const rowColumns = 'grid grid-cols-1 gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-[minmax(12rem,1.35fr)_minmax(8rem,0.75fr)_minmax(8rem,1fr)_minmax(8rem,0.9fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_auto] lg:items-center'
+  const schedule = recurrence.frequency === 'once'
+    ? t('Once')
+    : `${t(recurrenceLabel)} · ${formatDate(recurrence.startDate, locale)} – ${recurrence.endDate ? formatDate(recurrence.endDate, locale) : t('Ongoing')}`
 
   return (
-    <article className={rowColumns}>
-      <ViewField label={t('Name')} value={item.name} />
-      <ViewField label={t('Amount')} value={formatCurrency(item.amountCents, currencyCode, locale)} />
-    <ViewField label={t('Category')} value={categoryLabel(item.categoryId, (key) => t(key))} />
-      <ViewField label={t('Frequency')} value={t(recurrenceLabel)} />
-      <ViewField label={t('Start date')} value={formatDate(recurrence.startDate, locale)} />
-      <ViewField label={t('End date')} value={endDate} />
-      <div className="flex flex-wrap gap-2 lg:justify-end">
-        <button aria-label={t('Edit {{name}}', { name: item.name })} className={secondaryButtonClassName} disabled={disabled} onClick={onEdit} type="button">
-          {t('Edit')}
+    <article className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 rounded-xl border border-border bg-surface px-4 py-3 shadow-sm sm:px-5 sm:py-4 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+      <div className="min-w-0 sm:col-start-1 sm:row-start-1">
+        <h4 className="truncate font-semibold text-foreground">{item.name}</h4>
+        <p className="mt-0.5 truncate text-sm text-muted">{categoryLabel(item.categoryId, (key) => t(key))}</p>
+      </div>
+      <p className="whitespace-nowrap text-right text-base font-semibold tabular-nums text-foreground sm:col-start-2 sm:row-start-1">{formatCurrency(item.amountCents, currencyCode, locale)}</p>
+      <p className="col-span-2 min-w-0 truncate text-xs text-muted sm:col-span-2 sm:col-start-1 sm:row-start-2">{schedule}</p>
+      <div className="col-span-2 flex justify-end gap-1 border-t border-border pt-2 sm:col-span-1 sm:col-start-3 sm:row-span-2 sm:row-start-1 sm:items-center sm:border-0 sm:pt-0">
+        <button aria-label={t('Edit {{name}}', { name: item.name })} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border-strong bg-background text-foreground hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50" disabled={disabled} onClick={onEdit} title={t('Edit')} type="button">
+          <Pencil aria-hidden="true" size={16} />
         </button>
-        <button aria-label={t('Duplicate {{name}}', { name: item.name })} className={secondaryButtonClassName} disabled={disabled} onClick={onDuplicate} type="button">
-          <Copy aria-hidden="true" size={15} />
-          {t('Duplicate')}
+        <button aria-label={t('Duplicate {{name}}', { name: item.name })} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border-strong bg-background text-foreground hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50" disabled={disabled} onClick={onDuplicate} title={t('Duplicate')} type="button">
+          <Copy aria-hidden="true" size={16} />
         </button>
-        <button aria-label={t('Delete {{name}}', { name: item.name })} className={dangerButtonClassName} disabled={disabled} onClick={onDelete} type="button">
-          <Trash2 aria-hidden="true" size={15} />
-          {t('Delete')}
+        <button aria-label={t('Delete {{name}}', { name: item.name })} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-danger/30 bg-danger/5 text-danger hover:bg-danger/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger disabled:opacity-50" disabled={disabled} onClick={onDelete} title={t('Delete')} type="button">
+          <Trash2 aria-hidden="true" size={16} />
         </button>
       </div>
     </article>
@@ -402,6 +400,11 @@ function LedgerEditor({
   const [actionError, setActionError] = useState<string | null>(null)
   const label = t(kind === 'income' ? 'Income' : 'Expenses')
   const addLabel = t(kind === 'income' ? 'Add income item' : 'Add expense item')
+  const monthTotals = calculateLedgerTotals({
+    income: kind === 'income' ? items : [],
+    expenses: kind === 'expense' ? items : [],
+  }, selectedMonth)
+  const monthlyTotalCents = kind === 'income' ? monthTotals.incomeCents : monthTotals.expenseCents
 
   const beginAdd = () => {
     setActionError(null)
@@ -466,11 +469,16 @@ function LedgerEditor({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-foreground">{label}</h3>
-          <p className="mt-1 text-sm text-muted">{t(items.length === 1 ? '{{value}} item' : '{{value}} items', { value: new Intl.NumberFormat(locale).format(items.length) })}</p>
+          <p className="mt-0.5 text-sm text-muted">
+            {t('For {{month}}: {{amount}}', {
+              month: formatMonth(selectedMonth, locale),
+              amount: formatCurrency(monthlyTotalCents, currencyCode, locale),
+            })}
+          </p>
         </div>
-        <button className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-secondary-dark px-3 text-sm font-semibold text-white hover:bg-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-dark disabled:cursor-not-allowed disabled:opacity-50" disabled={Boolean(editing)} onClick={beginAdd} type="button">
+        <button aria-label={addLabel} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-secondary-dark px-3 text-sm font-semibold text-white hover:bg-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-dark disabled:cursor-not-allowed disabled:opacity-50" disabled={Boolean(editing)} onClick={beginAdd} type="button">
           <Plus aria-hidden="true" size={16} />
-          {addLabel}
+          {t('Add')}
         </button>
       </div>
 
@@ -481,9 +489,6 @@ function LedgerEditor({
         </p>
       )}
 
-      <div className="mt-4 hidden gap-3 px-4 text-xs font-semibold uppercase tracking-wide text-muted lg:grid lg:grid-cols-[minmax(12rem,1.35fr)_minmax(8rem,0.75fr)_minmax(8rem,1fr)_minmax(8rem,0.9fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_auto]">
-        <span>{t('Name')}</span><span>{t('Amount')}</span><span>{t('Category')}</span><span>{t('Frequency')}</span><span>{t('Start date')}</span><span>{t('End date')}</span><span className="sr-only">{t('Actions')}</span>
-      </div>
       <div className="mt-3 space-y-3" aria-label={t('{{kind}} items', { kind: label })}>
         {editing?.mode === 'add' && (
           <ItemDraftCard
@@ -516,7 +521,7 @@ function LedgerEditor({
               onDelete={() => deleteItem(item)}
             />)}
         {items.length === 0 && editing?.mode !== 'add' && (
-          <p className="rounded-xl border border-dashed border-border-strong bg-surface p-5 text-sm text-muted">
+          <p className="rounded-xl border border-dashed border-border-strong bg-surface p-4 text-sm text-muted">
             {t(kind === 'income' ? 'No income items yet. Add one to get started.' : 'No expense items yet. Add one to get started.')}
           </p>
         )}
@@ -571,18 +576,18 @@ function ProfileNameRow({
   return (
     <li className="grid gap-3 rounded-xl border border-border bg-surface p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
       <form className="min-w-0" onSubmit={saveName}>
-        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted" htmlFor={nameId}>
-          {t('Name for {{name}}', { name: profile.name })}
+        <label className="mb-1.5 block text-sm font-medium text-foreground" htmlFor={nameId}>
+          {t('Profile name')}
         </label>
         <div className="flex flex-wrap gap-2">
           <input className={`${inputClassName} min-w-[12rem] flex-1`} id={nameId} onChange={(event) => setName(event.currentTarget.value)} value={name} />
           <button aria-label={t('Save name for {{name}}', { name: profile.name })} className={secondaryButtonClassName} disabled={!name.trim() || name.trim() === profile.name} type="submit">
             <Save aria-hidden="true" size={15} />
-            {t('Save profile name')}
+            {t('Save')}
           </button>
         </div>
         {error && <p className="mt-2 text-sm text-danger" role="alert">{translateMessage(error, t)}</p>}
-        {isParticipant && <p className="mt-2 text-xs text-secondary-dark">{t('Selected participant')}</p>}
+        {isParticipant && <p className="mt-2 text-xs text-secondary-dark">{t('Participant')}</p>}
         {isParticipant && <p className="sr-only" id={deleteHelpId}>{t('Change the participant selection before removing this profile.')}</p>}
       </form>
       <button
@@ -652,10 +657,7 @@ function ProfileManagement({ scenario, scenarioId }: { scenario: Scenario; scena
 
   return (
     <section aria-labelledby="profile-management-title" className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight" id="profile-management-title">{t('Profiles and participants')}</h2>
-        <p className="mt-1 text-sm text-muted">{t('Add profiles and choose who shares costs. You can leave this alone if you only need one profile.')}</p>
-      </div>
+      <h2 className="text-xl font-semibold tracking-tight" id="profile-management-title">{t('Profiles and participants')}</h2>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <div>
@@ -684,7 +686,7 @@ function ProfileManagement({ scenario, scenarioId }: { scenario: Scenario; scena
 
       <form className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-end" onSubmit={createProfile}>
         <div className="min-w-0 flex-1">
-          <label className="mb-1.5 block text-sm font-medium text-foreground" htmlFor="new-profile-name">{t('New profile name')}</label>
+          <label className="mb-1.5 block text-sm font-medium text-foreground" htmlFor="new-profile-name">{t('Profile name')}</label>
           <input className={inputClassName} id="new-profile-name" onChange={(event) => setNewProfileName(event.currentTarget.value)} value={newProfileName} />
         </div>
         <button className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-secondary-dark px-3 text-sm font-semibold text-white hover:bg-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-dark" type="submit">
@@ -735,23 +737,13 @@ function LedgerPage() {
 
   return (
     <div>
-      <header>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t('Ledger')}</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-          {t('Enter income and expenses for your main profile. Add another profile or shared costs when you need them.')}
-        </p>
+      <header className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">{t('Ledger')}</h1>
+        <span className="rounded-full bg-surface px-3 py-1.5 text-xs font-medium text-muted">{currencyCode}</span>
       </header>
 
-      <section aria-labelledby="ledger-owner-title" className="mt-8">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight" id="ledger-owner-title">{t('Income and expenses')}</h2>
-            <p className="mt-1 text-sm text-muted">{ownerLabel}</p>
-          </div>
-          <p className="text-xs font-medium text-muted">{t('Amounts in {{currency}}', { currency: currencyCode })}</p>
-        </div>
-
-        <div aria-label={t('Ledger owner')} className="mt-4 flex flex-wrap gap-2" role="group">
+      <section aria-label={t('Ledger')} className="mt-4">
+        <div aria-label={t('Ledger owner')} className="flex flex-wrap gap-2" role="group">
           {profiles.map((profile) => {
             const isActive = !isJoint && activeProfileId === profile.id
             const isParticipant = scenario.participantIds.includes(profile.id)
@@ -806,9 +798,9 @@ function LedgerPage() {
         )}
       </section>
 
-      <details className="mt-7">
+      <details className="mt-5">
         <summary className="cursor-pointer list-none rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-muted hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
-          {t('Manage profiles and settlement')}
+          {t('Manage profiles')}
         </summary>
         <div className="mt-3">
           <ProfileManagement key={activeScenarioId} scenario={scenario} scenarioId={activeScenarioId} />
